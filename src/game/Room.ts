@@ -24,6 +24,7 @@ export class Room extends Container {
     r.drawCorridor();
     r.drawFloor();
     r.drawWalls();
+    r.drawDoorframe();
     return r;
   }
 
@@ -110,14 +111,57 @@ export class Room extends Container {
   private drawCorridor() {
     const halfW = ISO_TILE_W / 2;
     const halfH = ISO_TILE_H / 2;
-    const c = isoToScreen(-1, 4);
     const g = new Graphics();
-    g.poly([
-      c.x,        c.y - halfH,
-      c.x + halfW, c.y,
-      c.x,        c.y + halfH,
-      c.x - halfW, c.y,
-    ]).fill(0x1a1a22);
+
+    // Inner corridor tiles (rows 4 and 5, col -1) — dark entrance
+    for (const row of [4, 5]) {
+      const c = isoToScreen(-0.5, row + 0.5);
+      g.poly([
+        c.x,         c.y - halfH,
+        c.x + halfW, c.y,
+        c.x,         c.y + halfH,
+        c.x - halfW, c.y,
+      ]).fill(0x1a1a22);
+    }
+
+    // Outer corridor tiles (col -2) — deeper dark
+    for (const row of [4, 5]) {
+      const c = isoToScreen(-1.5, row + 0.5);
+      g.poly([
+        c.x,         c.y - halfH,
+        c.x + halfW, c.y,
+        c.x,         c.y + halfH,
+        c.x - halfW, c.y,
+      ]).fill(0x111118);
+    }
+
     this.addChild(g);
+  }
+
+  private drawDoorframe() {
+    const wallH = WALL_HEIGHT;
+    const lintelH = 40;
+
+    const a = isoToScreen(0, 4);
+    const b = isoToScreen(0, 5);
+    const w = new Graphics();
+
+    // Lintel face
+    w.poly([
+      a.x, a.y - wallH,
+      b.x, b.y - wallH,
+      b.x, b.y - wallH + lintelH,
+      a.x, a.y - wallH + lintelH,
+    ]).fill(WALL_BACK);
+
+    // Top edge highlight
+    w.poly([
+      a.x, a.y - wallH,
+      b.x, b.y - wallH,
+      b.x - 4, b.y - wallH + 4,
+      a.x - 4, a.y - wallH + 4,
+    ]).fill(WALL_TOP);
+
+    this.addChild(w);
   }
 }

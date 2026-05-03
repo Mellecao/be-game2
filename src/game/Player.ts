@@ -26,8 +26,8 @@ export class Player extends Container {
   private walkFrame:  Record<DirKey, number> = { front: 0, back: 0, side: 0 };
   private walkTimer:  Record<DirKey, number> = { front: 0, back: 0, side: 0 };
 
-  worldCol = 5;
-  worldRow = 5;
+  worldCol = 0.5;
+  worldRow = 4.5;
 
   private keys: Record<string, boolean> = {};
   collisionMap: CollisionMap | null = null;
