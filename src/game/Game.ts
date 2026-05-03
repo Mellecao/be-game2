@@ -71,6 +71,14 @@ const FURNITURE_CONFIG: FurnitureConfig[] = [
     defaultDir: 2,
     validDirs: [0, 2, 4, 6],
   },
+  {
+    id: "plant",
+    url: ASSETS.nitroPlant,
+    defaultCol: 3,
+    defaultRow: 2,
+    defaultDir: 0,
+    validDirs: [0, 2, 4, 6],
+  },
 ];
 
 export class Game {

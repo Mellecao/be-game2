@@ -8,6 +8,7 @@ const ITEMS = [
   { id: "desk",   label: "Mesa Gamer" },
   { id: "table",  label: "Mesa" },
   { id: "window", label: "Janela" },
+  { id: "plant",  label: "Planta" },
 ];
 
 export class InventoryPanel {

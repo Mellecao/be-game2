@@ -24,4 +24,5 @@ export const ASSETS = {
   nitroChair: "/chair1/waasa_chair.nitro",
   nitroDeskTable: "/desktoptable/uni_gamerdesk.nitro",
   nitroTable: "/table1/cubie_table.nitro",
+  nitroPlant: "/classic9_plant_1777826901/classic9_plant.nitro",
 } as const;
