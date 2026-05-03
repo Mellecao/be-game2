@@ -5,6 +5,7 @@ import { NPC } from "./NPC";
 import { NitroFurniture } from "./NitroFurniture";
 import { FurnitureEditor } from "./FurnitureEditor";
 import { ASSETS } from "./constants";
+import { CollisionMap } from "./CollisionMap";
 import { ROOM_COLS, ROOM_ROWS, WALL_HEIGHT, isoToScreen } from "./iso";
 
 export type NPCClickHandler = (npc: NPC) => void;
@@ -62,6 +63,14 @@ const FURNITURE_CONFIG: FurnitureConfig[] = [
     defaultDir: 4,
     validDirs: [2, 4],
   },
+  {
+    id: "table",
+    url: ASSETS.nitroTable,
+    defaultCol: 5,
+    defaultRow: 4,
+    defaultDir: 2,
+    validDirs: [0, 2, 4, 6],
+  },
 ];
 
 export class Game {
@@ -72,6 +81,7 @@ export class Game {
   npcs: NPC[] = [];
   furniture: NitroFurniture[] = [];
   private editor!: FurnitureEditor;
+  collision!: CollisionMap;
   private onNpcClick: NPCClickHandler | null = null;
 
   constructor(app: Application) {
@@ -89,7 +99,8 @@ export class Game {
 
     const savedMap = await this.fetchSavedPositions();
 
-    this.editor = new FurnitureEditor(this.app, this.world);
+    this.collision = new CollisionMap();
+    this.editor = new FurnitureEditor(this.app, this.world, this.collision);
 
     // Back-right wall panels: id = "wall_r_{col}"
     for (let col = 0; col < ROOM_COLS - 1; col += 2) {
@@ -152,6 +163,7 @@ export class Game {
     }
 
     this.player = await Player.load();
+    this.player.collisionMap = this.collision;
     this.world.addChild(this.player);
 
     const copywriter = await NPC.create("copywriter", "Copywriter", 7, 3);
@@ -172,6 +184,39 @@ export class Game {
 
   setRemoveWalls(on: boolean) {
     this.editor.setRemoveWallsMode(on);
+  }
+
+  getFurnitureList(): NitroFurniture[] {
+    return this.furniture;
+  }
+
+  async spawnFurniture(baseId: string): Promise<void> {
+    const cfg = FURNITURE_CONFIG.find((c) => c.id === baseId);
+    if (!cfg) return;
+
+    const active = this.furniture.filter(
+      (f) => (f.id === baseId || f.id.startsWith(baseId + "_")) && f.visible
+    );
+    if (active.length >= 4) return;
+
+    const idx = active.length + 1;
+    const newId = idx === 1 ? baseId : `${baseId}_${idx}`;
+    const col = Math.floor(ROOM_COLS / 2);
+    const row = Math.floor(ROOM_ROWS / 2);
+
+    const item = await NitroFurniture.load(cfg.url, {
+      col,
+      row,
+      direction: cfg.defaultDir,
+      includeShadow: cfg.includeShadow,
+      yOffset: cfg.yOffset,
+    });
+    item.id = newId;
+    item.validDirections = cfg.validDirs;
+    this.world.addChild(item);
+    this.furniture.push(item);
+    this.editor.register(item);
+    this.sortDepth();
   }
 
   async saveLayout(): Promise<void> {
