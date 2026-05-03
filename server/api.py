@@ -40,6 +40,66 @@ class FurnitureItem(BaseModel):
     removed: bool = False
 
 
+class InventoryAction(BaseModel):
+    item_id: str
+    owner_id: str | None = None
+
+INVENTORY_DEFAULTS = ["sofa", "chair", "desk", "table", "window"]
+
+def _ensure_seed(db):
+    result = db.table("inventory_items").select("id").limit(1).execute()
+    if not result.data:
+        db.table("inventory_items").insert([
+            {"item_id": item_id, "quantity": 1, "owner_id": None}
+            for item_id in INVENTORY_DEFAULTS
+        ]).execute()
+
+
+@app.get("/api/inventory")
+def get_inventory():
+    db = get_supabase()
+    _ensure_seed(db)
+    result = db.table("inventory_items").select("item_id,quantity").is_("owner_id", "null").execute()
+    return result.data
+
+
+@app.post("/api/inventory/add")
+def add_inventory(action: InventoryAction):
+    db = get_supabase()
+    existing = (
+        db.table("inventory_items")
+        .select("id,quantity")
+        .eq("item_id", action.item_id)
+        .is_("owner_id", "null")
+        .execute()
+    )
+    if existing.data:
+        current = existing.data[0]["quantity"]
+        if current >= 4:
+            raise HTTPException(status_code=400, detail="Limite de 4 atingido")
+        db.table("inventory_items").update({"quantity": current + 1}).eq("id", existing.data[0]["id"]).execute()
+    else:
+        db.table("inventory_items").insert({"item_id": action.item_id, "quantity": 1, "owner_id": None}).execute()
+    return {"ok": True}
+
+
+@app.post("/api/inventory/remove")
+def remove_inventory(action: InventoryAction):
+    db = get_supabase()
+    existing = (
+        db.table("inventory_items")
+        .select("id,quantity")
+        .eq("item_id", action.item_id)
+        .is_("owner_id", "null")
+        .execute()
+    )
+    if not existing.data or existing.data[0]["quantity"] <= 0:
+        raise HTTPException(status_code=400, detail="Sem estoque")
+    current = existing.data[0]["quantity"]
+    db.table("inventory_items").update({"quantity": current - 1}).eq("id", existing.data[0]["id"]).execute()
+    return {"ok": True}
+
+
 @app.get("/api/furniture")
 def get_furniture():
     db = get_supabase()
