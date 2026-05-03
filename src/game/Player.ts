@@ -5,13 +5,20 @@ import { CollisionMap } from "./CollisionMap";
 
 type Dir = "front" | "back" | "left" | "right";
 
+const WALK_FPS = 8;
+const TICKS_PER_FRAME = 60 / WALK_FPS;
+
 export class Player extends Container {
   private sprite!: Sprite;
   private shadow!: Sprite;
-  private textures: Record<string, Texture> = {};
-  private dir: Dir = "front";
 
-  // World position in iso tile coordinates (col, row), can be fractional
+  private idleTextures: Record<string, Texture> = {};
+  private walkTextures: Record<string, Texture[]> = { front: [], back: [], side: [] };
+
+  private dir: Dir = "front";
+  private walkFrame = 0;
+  private walkTimer = 0;
+
   worldCol = 5;
   worldRow = 5;
 
@@ -20,13 +27,24 @@ export class Player extends Container {
 
   static async load(): Promise<Player> {
     const p = new Player();
-    p.textures.frontIdle = await Assets.load(ASSETS.avatarFrontIdle);
-    p.textures.frontWalk = await Assets.load(ASSETS.avatarFrontWalk);
-    p.textures.backIdle = await Assets.load(ASSETS.avatarBackIdle);
-    p.textures.backWalk = await Assets.load(ASSETS.avatarBackWalk);
-    p.textures.sideIdle = await Assets.load(ASSETS.avatarSideIdle);
-    p.textures.sideWalk = await Assets.load(ASSETS.avatarSideWalk);
-    const shadowTex = await Assets.load(ASSETS.shadow);
+
+    const [shadowTex, fi, bi, si, ...walkFrames] = await Promise.all([
+      Assets.load(ASSETS.shadow),
+      Assets.load("/avatar/front_1_iddle.png"),
+      Assets.load("/avatar/back_1_iddle.png"),
+      Assets.load("/avatar/side_1_iddle.png"),
+      ...[1, 2, 3, 4, 5].map((i) => Assets.load(`/avatar/front_${i}_walking.png`)),
+      ...[1, 2, 3, 4, 5].map((i) => Assets.load(`/avatar/back_${i}_walking.png`)),
+      ...[1, 2, 3, 4, 5].map((i) => Assets.load(`/avatar/side_${i}_walking.png`)),
+    ]);
+
+    p.idleTextures.front = fi;
+    p.idleTextures.back  = bi;
+    p.idleTextures.side  = si;
+
+    p.walkTextures.front = walkFrames.slice(0, 5);
+    p.walkTextures.back  = walkFrames.slice(5, 10);
+    p.walkTextures.side  = walkFrames.slice(10, 15);
 
     p.shadow = new Sprite(shadowTex);
     p.shadow.anchor.set(0.5, 0.5);
@@ -35,7 +53,7 @@ export class Player extends Container {
     p.shadow.scale.set(1.1, 0.75);
     p.addChild(p.shadow);
 
-    p.sprite = new Sprite(p.textures.frontIdle);
+    p.sprite = new Sprite(p.idleTextures.front);
     p.sprite.anchor.set(0.5, 1);
     p.sprite.scale.set(2.0);
     p.addChild(p.sprite);
@@ -46,29 +64,22 @@ export class Player extends Container {
   }
 
   private bindInput() {
-    window.addEventListener("keydown", (e) => {
-      this.keys[e.key.toLowerCase()] = true;
-    });
-    window.addEventListener("keyup", (e) => {
-      this.keys[e.key.toLowerCase()] = false;
-    });
+    window.addEventListener("keydown", (e) => { this.keys[e.key.toLowerCase()] = true; });
+    window.addEventListener("keyup",   (e) => { this.keys[e.key.toLowerCase()] = false; });
   }
 
-  update(_dt: number) {
-    let sx = 0; // screen-relative x
-    let sy = 0; // screen-relative y
+  update(dt: number) {
+    let sx = 0;
+    let sy = 0;
 
-    if (this.keys["w"] || this.keys["arrowup"]) sy -= 1;
-    if (this.keys["s"] || this.keys["arrowdown"]) sy += 1;
-    if (this.keys["a"] || this.keys["arrowleft"]) sx -= 1;
-    if (this.keys["d"] || this.keys["arrowright"]) sx += 1;
+    if (this.keys["w"] || this.keys["arrowup"])    sy -= 1;
+    if (this.keys["s"] || this.keys["arrowdown"])   sy += 1;
+    if (this.keys["a"] || this.keys["arrowleft"])   sx -= 1;
+    if (this.keys["d"] || this.keys["arrowright"])  sx += 1;
 
     const moving = sx !== 0 || sy !== 0;
 
     if (moving) {
-      // Convert screen-direction to iso world direction
-      // screen +x = (col-row), screen +y = (col+row)/2
-      // so dCol = sy*2 + sx, dRow = sy*2 - sx (then normalize)
       let dCol = sy + sx * 0.5;
       let dRow = sy - sx * 0.5;
       const len = Math.hypot(dCol, dRow);
@@ -83,12 +94,20 @@ export class Player extends Container {
         this.worldRow = next.row;
       }
 
-      // Direction for sprite
       if (Math.abs(sx) > Math.abs(sy)) {
         this.dir = sx > 0 ? "right" : "left";
       } else {
         this.dir = sy > 0 ? "front" : "back";
       }
+
+      this.walkTimer += dt;
+      if (this.walkTimer >= TICKS_PER_FRAME) {
+        this.walkTimer -= TICKS_PER_FRAME;
+        this.walkFrame = (this.walkFrame + 1) % 5;
+      }
+    } else {
+      this.walkFrame = 0;
+      this.walkTimer = 0;
     }
 
     this.updateSprite(moving);
@@ -102,17 +121,13 @@ export class Player extends Container {
   }
 
   private updateSprite(walking: boolean) {
-    let tex: Texture;
-    let flip = 1;
-    if (this.dir === "front") {
-      tex = walking ? this.textures.frontWalk : this.textures.frontIdle;
-    } else if (this.dir === "back") {
-      tex = walking ? this.textures.backWalk : this.textures.backIdle;
-    } else {
-      tex = walking ? this.textures.sideWalk : this.textures.sideIdle;
-      flip = this.dir === "left" ? -1 : 1;
-    }
-    this.sprite.texture = tex;
+    const dirKey = this.dir === "left" || this.dir === "right" ? "side" : this.dir;
+    const flip   = this.dir === "left" ? -1 : 1;
+
+    this.sprite.texture = walking
+      ? this.walkTextures[dirKey][this.walkFrame]
+      : this.idleTextures[dirKey];
+
     this.sprite.scale.x = 2.0 * flip;
   }
 }
