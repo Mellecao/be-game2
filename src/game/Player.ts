@@ -1,6 +1,7 @@
 import { Container, Sprite, Texture, Assets } from "pixi.js";
 import { ASSETS, PLAYER_SPEED } from "./constants";
 import { clampToRoom, isoToScreen } from "./iso";
+import { CollisionMap } from "./CollisionMap";
 
 type Dir = "front" | "back" | "left" | "right";
 
@@ -15,6 +16,7 @@ export class Player extends Container {
   worldRow = 5;
 
   private keys: Record<string, boolean> = {};
+  collisionMap: CollisionMap | null = null;
 
   static async load(): Promise<Player> {
     const p = new Player();
@@ -74,8 +76,12 @@ export class Player extends Container {
       dRow = (dRow / len) * (PLAYER_SPEED / 32);
 
       const next = clampToRoom(this.worldCol + dCol, this.worldRow + dRow);
-      this.worldCol = next.col;
-      this.worldRow = next.row;
+      const tileCol = Math.round(next.col);
+      const tileRow = Math.round(next.row);
+      if (!this.collisionMap || !this.collisionMap.isBlocked(tileCol, tileRow)) {
+        this.worldCol = next.col;
+        this.worldRow = next.row;
+      }
 
       // Direction for sprite
       if (Math.abs(sx) > Math.abs(sy)) {
