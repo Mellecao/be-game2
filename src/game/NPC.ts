@@ -2,12 +2,27 @@ import { Container, Sprite, Text, Assets, Graphics } from "pixi.js";
 import { ASSETS } from "./constants";
 import { isoToScreen } from "./iso";
 
+export interface AgentData {
+  id: string;
+  display_name: string;
+  role: string;
+  goal: string;
+  backstory: string;
+  col: number;
+  row: number;
+  sprite_char: number;
+}
+
 export class NPC extends Container {
   public id: string;
   public displayName: string;
+  public role: string;
+  public goal: string;
+  public backstory: string;
   public worldCol: number;
   public worldRow: number;
 
+  private label!: Text;
   private indicator!: Graphics;
   private indicatorBaseY = 0;
   private time = 0;
@@ -16,19 +31,23 @@ export class NPC extends Container {
     super();
     this.id = id;
     this.displayName = name;
+    this.role = "";
+    this.goal = "";
+    this.backstory = "";
     this.worldCol = col;
     this.worldRow = row;
   }
 
-  static async create(
-    id: string,
-    name: string,
-    col: number,
-    row: number
-  ): Promise<NPC> {
-    const n = new NPC(id, name, col, row);
-    const tex = await Assets.load(ASSETS.npcFrontIdle);
-    const shadowTex = await Assets.load(ASSETS.shadow);
+  static async fromAgentData(data: AgentData): Promise<NPC> {
+    const n = new NPC(data.id, data.display_name, data.col, data.row);
+    n.role = data.role;
+    n.goal = data.goal;
+    n.backstory = data.backstory;
+
+    const [tex, shadowTex] = await Promise.all([
+      Assets.load(`/avatar/front_${data.sprite_char}_iddle.png`),
+      Assets.load(ASSETS.shadow),
+    ]);
 
     const shadow = new Sprite(shadowTex);
     shadow.anchor.set(0.5, 0.5);
@@ -43,7 +62,7 @@ export class NPC extends Container {
     n.addChild(sprite);
 
     const label = new Text({
-      text: name,
+      text: data.display_name,
       style: {
         fontFamily: "Segoe UI",
         fontSize: 11,
@@ -54,6 +73,7 @@ export class NPC extends Container {
     });
     label.anchor.set(0.5, 1);
     label.y = -sprite.height - 22;
+    n.label = label;
     n.addChild(label);
 
     const indicator = new Graphics();
@@ -71,6 +91,11 @@ export class NPC extends Container {
 
     n.syncScreen();
     return n;
+  }
+
+  updateLabel(name: string) {
+    this.displayName = name;
+    this.label.text = name;
   }
 
   update(dt: number) {
