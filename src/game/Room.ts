@@ -34,7 +34,7 @@ export class Room extends Container {
 
     for (let row = 0; row < ROOM_ROWS; row++) {
       for (let col = 0; col < ROOM_COLS; col++) {
-        const c = isoToScreen(col, row);
+        const c = isoToScreen(col + 0.5, row + 0.5);
         const top   = { x: c.x,         y: c.y - halfH };
         const right = { x: c.x + halfW,  y: c.y };
         const bot   = { x: c.x,         y: c.y + halfH };
@@ -65,7 +65,7 @@ export class Room extends Container {
     // Grid lines drawn on top of faces
     for (let row = 0; row < ROOM_ROWS; row++) {
       for (let col = 0; col < ROOM_COLS; col++) {
-        const c = isoToScreen(col, row);
+        const c = isoToScreen(col + 0.5, row + 0.5);
         g.poly([
           c.x,           c.y - halfH,
           c.x + halfW,   c.y,

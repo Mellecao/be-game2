@@ -33,7 +33,8 @@ async function bootstrap() {
 
   const inventory = new InventoryPanel(
     () => game.getFurnitureList(),
-    (itemId) => game.spawnFurniture(itemId)
+    (itemId) => game.spawnFurniture(itemId),
+    (itemId) => game.removeFurniture(itemId)
   );
 
   new BuildingPanel(

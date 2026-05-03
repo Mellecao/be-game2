@@ -219,6 +219,16 @@ export class Game {
     this.sortDepth();
   }
 
+  removeFurniture(baseId: string): void {
+    const active = this.furniture.filter(
+      (f) => (f.id === baseId || f.id.startsWith(baseId + "_")) && f.visible
+    );
+    if (active.length === 0) return;
+    const item = active[active.length - 1];
+    item.visible = false;
+    this.collision.unblock(item.worldCol, item.worldRow);
+  }
+
   async saveLayout(): Promise<void> {
     const layout = this.editor.getLayout();
     const res = await fetch("/api/furniture/save-all", {

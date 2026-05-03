@@ -12,11 +12,12 @@ const ITEMS = [
 
 export class InventoryPanel {
   private wrap: HTMLElement;
-  private cards = new Map<string, { counter: HTMLElement; btn: HTMLButtonElement }>();
+  private cards = new Map<string, { counter: HTMLElement; addBtn: HTMLButtonElement; removeBtn: HTMLButtonElement }>();
 
   constructor(
     private getFurniture: () => NitroFurniture[],
-    private onSpawn: (itemId: string) => void
+    private onSpawn: (itemId: string) => void,
+    private onRemove: (itemId: string) => void
   ) {
     this.injectStyles();
     this.wrap = document.createElement("div");
@@ -39,19 +40,29 @@ export class InventoryPanel {
       counter.className = "inv-count";
       counter.textContent = `0/${MAX_PER_ITEM}`;
 
-      const btn = document.createElement("button");
-      btn.className = "inv-btn";
-      btn.textContent = "+";
-      btn.addEventListener("click", () => {
+      const removeBtn = document.createElement("button");
+      removeBtn.className = "inv-btn inv-btn-remove";
+      removeBtn.textContent = "−";
+      removeBtn.disabled = true;
+      removeBtn.addEventListener("click", () => {
+        this.onRemove(item.id);
+        setTimeout(() => this.refresh(), 50);
+      });
+
+      const addBtn = document.createElement("button");
+      addBtn.className = "inv-btn";
+      addBtn.textContent = "+";
+      addBtn.addEventListener("click", () => {
         this.onSpawn(item.id);
         setTimeout(() => this.refresh(), 300);
       });
 
       card.appendChild(label);
       card.appendChild(counter);
-      card.appendChild(btn);
+      card.appendChild(removeBtn);
+      card.appendChild(addBtn);
       this.wrap.appendChild(card);
-      this.cards.set(item.id, { counter, btn });
+      this.cards.set(item.id, { counter, addBtn, removeBtn });
     }
 
     document.body.appendChild(this.wrap);
@@ -75,7 +86,8 @@ export class InventoryPanel {
       ).length;
       const refs = this.cards.get(item.id)!;
       refs.counter.textContent = `${count}/${MAX_PER_ITEM}`;
-      refs.btn.disabled = count >= MAX_PER_ITEM;
+      refs.addBtn.disabled = count >= MAX_PER_ITEM;
+      refs.removeBtn.disabled = count === 0;
     }
   }
 
@@ -112,7 +124,7 @@ export class InventoryPanel {
       .inv-card {
         display: flex;
         align-items: center;
-        gap: 8px;
+        gap: 6px;
         background: rgba(255,255,255,0.05);
         border-radius: 4px;
         padding: 6px 8px;
@@ -131,8 +143,10 @@ export class InventoryPanel {
         line-height: 1;
         padding: 0;
       }
+      .inv-btn-remove { background: #8a3a3a; }
       .inv-btn:disabled { background: #555; cursor: not-allowed; }
       .inv-btn:not(:disabled):hover { background: #4caf50; }
+      .inv-btn-remove:not(:disabled):hover { background: #cf5050; }
     `;
     document.head.appendChild(style);
   }
