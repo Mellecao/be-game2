@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BE-Game | Black Elephant Office</title>
+    <link rel="stylesheet" href="/src/styles.css" />
+  </head>
+  <body>
+    <div id="game-container"></div>
+    <div id="chat-panel" class="hidden">
+      <div class="chat-header">
+        <img id="chat-portrait" src="" alt="" />
+        <span id="chat-name">NPC</span>
+        <button id="chat-close">x</button>
+      </div>
+      <div id="chat-messages"></div>
+      <form id="chat-form">
+        <input id="chat-input" type="text" placeholder="Digite sua mensagem..." autocomplete="off" />
+        <button type="submit" id="chat-send">Enviar</button>
+      </form>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
