@@ -2,6 +2,7 @@ import { Application } from "pixi.js";
 import { Game } from "./game/Game";
 import { ChatPanel } from "./ui/ChatPanel";
 import { BuildingPanel } from "./ui/BuildingPanel";
+import { InventoryPanel } from "./ui/InventoryPanel";
 import { ASSETS } from "./game/constants";
 
 async function bootstrap() {
@@ -30,8 +31,16 @@ async function bootstrap() {
     });
   });
 
+  const inventory = new InventoryPanel(
+    () => game.getFurnitureList(),
+    (itemId) => game.spawnFurniture(itemId)
+  );
+
   new BuildingPanel(
-    (active) => game.setBuilding(active),
+    (active) => {
+      game.setBuilding(active);
+      active ? inventory.show() : inventory.hide();
+    },
     () => game.saveLayout(),
     (on) => game.setRemoveWalls(on)
   );
