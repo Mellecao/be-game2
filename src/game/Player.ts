@@ -4,20 +4,27 @@ import { clampToRoom, isoToScreen } from "./iso";
 import { CollisionMap } from "./CollisionMap";
 
 type Dir = "front" | "back" | "left" | "right";
+type DirKey = "front" | "back" | "side";
 
 const WALK_FPS = 8;
 const IDLE_FPS = 4;
+
+const DIRS: DirKey[] = ["front", "back", "side"];
 
 export class Player extends Container {
   private sprite!: Sprite;
   private shadow!: Sprite;
 
-  private idleTextures: Record<string, Texture[]> = { front: [], back: [], side: [] };
-  private walkTextures: Record<string, Texture[]> = { front: [], back: [], side: [] };
+  private idleTextures: Record<DirKey, Texture[]> = { front: [], back: [], side: [] };
+  private walkTextures: Record<DirKey, Texture[]> = { front: [], back: [], side: [] };
 
   private dir: Dir = "front";
-  private frame = 0;
-  private frameTimer = 0;
+
+  // Each direction key has its own independent frame counter
+  private idleFrame:  Record<DirKey, number> = { front: 0, back: 0, side: 0 };
+  private idleTimer:  Record<DirKey, number> = { front: 0, back: 0, side: 0 };
+  private walkFrame:  Record<DirKey, number> = { front: 0, back: 0, side: 0 };
+  private walkTimer:  Record<DirKey, number> = { front: 0, back: 0, side: 0 };
 
   worldCol = 5;
   worldRow = 5;
@@ -101,11 +108,20 @@ export class Player extends Container {
       }
     }
 
-    const fps = moving ? WALK_FPS : IDLE_FPS;
-    this.frameTimer += dt;
-    if (this.frameTimer >= 60 / fps) {
-      this.frameTimer -= 60 / fps;
-      this.frame = (this.frame + 1) % 5;
+    // Advance all direction counters independently every frame
+    const idleTicks = 60 / IDLE_FPS;
+    const walkTicks = 60 / WALK_FPS;
+    for (const k of DIRS) {
+      this.idleTimer[k] += dt;
+      if (this.idleTimer[k] >= idleTicks) {
+        this.idleTimer[k] -= idleTicks;
+        this.idleFrame[k] = (this.idleFrame[k] + 1) % 5;
+      }
+      this.walkTimer[k] += dt;
+      if (this.walkTimer[k] >= walkTicks) {
+        this.walkTimer[k] -= walkTicks;
+        this.walkFrame[k] = (this.walkFrame[k] + 1) % 5;
+      }
     }
 
     this.updateSprite(moving);
@@ -123,8 +139,8 @@ export class Player extends Container {
     const flip   = this.dir === "left" ? -1 : 1;
 
     this.sprite.texture = walking
-      ? this.walkTextures[dirKey][this.frame]
-      : this.idleTextures[dirKey][this.frame];
+      ? this.walkTextures[dirKey][this.walkFrame[dirKey]]
+      : this.idleTextures[dirKey][this.idleFrame[dirKey]];
 
     this.sprite.scale.x = 2.0 * flip;
   }
