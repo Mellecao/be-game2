@@ -30,12 +30,12 @@ export class Player extends Container {
     p.shadow.anchor.set(0.5, 0.5);
     p.shadow.alpha = 0.45;
     p.shadow.y = 4;
-    p.shadow.scale.set(0.9, 0.6);
+    p.shadow.scale.set(1.1, 0.75);
     p.addChild(p.shadow);
 
     p.sprite = new Sprite(p.textures.frontIdle);
     p.sprite.anchor.set(0.5, 1);
-    p.sprite.scale.set(1.6);
+    p.sprite.scale.set(2.0);
     p.addChild(p.sprite);
 
     p.bindInput();
@@ -107,6 +107,6 @@ export class Player extends Container {
       flip = this.dir === "left" ? -1 : 1;
     }
     this.sprite.texture = tex;
-    this.sprite.scale.x = 1.6 * flip;
+    this.sprite.scale.x = 2.0 * flip;
   }
 }

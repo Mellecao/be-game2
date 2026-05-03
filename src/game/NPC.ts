@@ -34,12 +34,12 @@ export class NPC extends Container {
     shadow.anchor.set(0.5, 0.5);
     shadow.alpha = 0.45;
     shadow.y = 4;
-    shadow.scale.set(0.9, 0.6);
+    shadow.scale.set(1.1, 0.75);
     n.addChild(shadow);
 
     const sprite = new Sprite(tex);
     sprite.anchor.set(0.5, 1);
-    sprite.scale.set(1.6);
+    sprite.scale.set(2.0);
     n.addChild(sprite);
 
     const label = new Text({

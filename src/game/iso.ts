@@ -2,7 +2,7 @@ export const ISO_TILE_W = 64;
 export const ISO_TILE_H = 32;
 export const ROOM_COLS = 11;
 export const ROOM_ROWS = 9;
-export const WALL_HEIGHT = 110;
+export const WALL_HEIGHT = 127;
 
 export interface IsoPoint {
   x: number;
