@@ -8,6 +8,7 @@ import {
   isoToScreen,
   screenToIso,
 } from "./iso";
+import { CollisionMap } from "./CollisionMap";
 
 export interface FurnitureLayoutEntry {
   id: string;
@@ -30,7 +31,7 @@ export class FurnitureEditor {
   private dragActive = false;
   private ghost: Graphics;
 
-  constructor(app: Application, world: Container) {
+  constructor(app: Application, world: Container, private collision: CollisionMap) {
     this.world = world;
 
     this.ghost = new Graphics();
@@ -48,6 +49,7 @@ export class FurnitureEditor {
   register(item: NitroFurniture, isWall = false) {
     this.items.push(item);
     if (isWall) this.wallItems.add(item);
+    this.collision.block(item.worldCol, item.worldRow);
 
     item.eventMode = "none";
     item.on("pointerdown", (e: FederatedPointerEvent) => {
@@ -57,6 +59,7 @@ export class FurnitureEditor {
       if (this.removeWallsMode && this.wallItems.has(item)) {
         item.visible = false;
         this.removedItems.add(item);
+        this.collision.unblock(item.worldCol, item.worldRow);
         return;
       }
 
@@ -135,7 +138,9 @@ export class FurnitureEditor {
   private onGlobalUp(e: FederatedPointerEvent) {
     if (!this.active || !this.dragActive || !this.selected) return;
     const { col, row } = this.tileAt(e.globalX, e.globalY);
+    this.collision.unblock(this.selected.worldCol, this.selected.worldRow);
     this.selected.moveTo(col, row);
+    this.collision.block(col, row);
     this.dragActive = false;
     this.ghost.visible = false;
   }
