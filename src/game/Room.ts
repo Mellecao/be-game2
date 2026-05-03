@@ -1,5 +1,4 @@
-import { Container, Graphics, Sprite } from "pixi.js";
-import { ASSETS } from "./constants";
+import { Container, Graphics } from "pixi.js";
 import {
   ISO_TILE_H,
   ISO_TILE_W,
@@ -8,141 +7,117 @@ import {
   WALL_HEIGHT,
   isoToScreen,
 } from "./iso";
-import { loadNitro, resolveAsset } from "./nitro";
 
-const FLOOR_EDGE = 0x4a3a26;
-const TILE_DOOR_COLOR = 0x4a3020;
-
-// Habbo "classic" wall palette — derived from a typical wood-panel wall to
-// complement the wood floor. We keep walls procedural for now since no wall
-// .nitro is provided.
 const WALL_BACK = 0xdcd1a8;
-const WALL_TOP = 0xefe6c0;
+const WALL_TOP  = 0xefe6c0;
 const WALL_TRIM = 0x6e5832;
+
+const FLOOR_TOP   = 0xb0a898;
+const FLOOR_LEFT  = 0x8a8078;
+const FLOOR_RIGHT = 0x787068;
+const FLOOR_GRID  = 0x787068;
+const FLOOR_EXT   = 4;
 
 export class Room extends Container {
   static async load(): Promise<Room> {
     const r = new Room();
-    await r.drawFloor();
+    r.drawCorridor();
+    r.drawFloor();
     r.drawWalls();
-    r.drawDoor();
     return r;
   }
 
-  private async drawFloor() {
-    // Use the 1x1 floor tile sprite from classic6_woodfloor.nitro
-    // (asset key `_64_b_0_0`, ~63x34 — exactly an iso tile).
-    const bundle = await loadNitro(ASSETS.nitroFloor);
-    const tileAsset = `${bundle.manifest.name}_64_b_0_0`;
-    const resolved = resolveAsset(bundle.manifest, bundle.spritesheet, tileAsset);
-    if (!resolved) {
-      throw new Error(`Floor tile asset not found in ${ASSETS.nitroFloor}`);
-    }
-
-    const tilesLayer = new Container();
-    for (let row = 0; row < ROOM_ROWS; row++) {
-      for (let col = 0; col < ROOM_COLS; col++) {
-        const c = isoToScreen(col, row);
-        const sp = new Sprite(resolved.texture);
-        // Override the JSON pivot (0.5/0.5) — we anchor by top-left so the
-        // Habbo offsets work out correctly.
-        sp.anchor.set(0, 0);
-        // Offsets are from the tile's east corner, not its center.
-        sp.x = c.x + ISO_TILE_W / 2 - resolved.offsetX;
-        sp.y = c.y - resolved.offsetY;
-        tilesLayer.addChild(sp);
-      }
-    }
-    this.addChild(tilesLayer);
-
-    // Per-tile borders for the iconic Habbo grid look.
-    const borders = new Graphics();
+  private drawFloor() {
     const halfW = ISO_TILE_W / 2;
     const halfH = ISO_TILE_H / 2;
+    const g = new Graphics();
+
     for (let row = 0; row < ROOM_ROWS; row++) {
       for (let col = 0; col < ROOM_COLS; col++) {
         const c = isoToScreen(col, row);
-        borders.poly([
-          c.x, c.y - halfH,
-          c.x + halfW, c.y,
-          c.x, c.y + halfH,
-          c.x - halfW, c.y,
-        ]).stroke({ color: FLOOR_EDGE, width: 1, alpha: 0.3 });
+        const top   = { x: c.x,         y: c.y - halfH };
+        const right = { x: c.x + halfW,  y: c.y };
+        const bot   = { x: c.x,         y: c.y + halfH };
+        const left  = { x: c.x - halfW,  y: c.y };
+
+        // Left extrusion face
+        g.poly([
+          left.x,  left.y,
+          bot.x,   bot.y,
+          bot.x,   bot.y  + FLOOR_EXT,
+          left.x,  left.y + FLOOR_EXT,
+        ]).fill(FLOOR_LEFT);
+
+        // Right extrusion face
+        g.poly([
+          bot.x,   bot.y,
+          right.x, right.y,
+          right.x, right.y + FLOOR_EXT,
+          bot.x,   bot.y   + FLOOR_EXT,
+        ]).fill(FLOOR_RIGHT);
+
+        // Top face
+        g.poly([top.x, top.y, right.x, right.y, bot.x, bot.y, left.x, left.y])
+          .fill(FLOOR_TOP);
       }
     }
-    this.addChild(borders);
+
+    // Grid lines drawn on top of faces
+    for (let row = 0; row < ROOM_ROWS; row++) {
+      for (let col = 0; col < ROOM_COLS; col++) {
+        const c = isoToScreen(col, row);
+        g.poly([
+          c.x,           c.y - halfH,
+          c.x + halfW,   c.y,
+          c.x,           c.y + halfH,
+          c.x - halfW,   c.y,
+        ]).stroke({ color: FLOOR_GRID, width: 1, alpha: 0.35 });
+      }
+    }
+
+    this.addChild(g);
   }
 
   private drawWalls() {
     const wallH = WALL_HEIGHT;
 
-    // BACK-LEFT wall: solid color with a trim line at the bottom.
-    {
-      const a = isoToScreen(0, 0);
-      const b = isoToScreen(0, ROOM_ROWS);
-      const wall = new Graphics();
-      wall.poly([
-        a.x, a.y - wallH,
-        b.x, b.y - wallH,
-        b.x, b.y,
-        a.x, a.y,
-      ]).fill(WALL_BACK);
-      // Top edge highlight (suggests a 3D wall thickness).
-      wall.poly([
-        a.x, a.y - wallH,
-        b.x, b.y - wallH,
-        b.x - 4, b.y - wallH + 4,
-        a.x - 4, a.y - wallH + 4,
-      ]).fill(WALL_TOP);
-      // Bottom trim (skirting board).
-      wall.poly([
-        a.x, a.y - 6,
-        b.x, b.y - 6,
-        b.x, b.y,
-        a.x, a.y,
-      ]).fill(WALL_TRIM);
-      this.addChild(wall);
-    }
+    // BACK-LEFT wall — two segments leaving gap at row 4..5 for corridor
+    const drawLeftSeg = (fromRow: number, toRow: number) => {
+      const a = isoToScreen(0, fromRow);
+      const b = isoToScreen(0, toRow);
+      const w = new Graphics();
+      w.poly([a.x, a.y - wallH, b.x, b.y - wallH, b.x, b.y, a.x, a.y]).fill(WALL_BACK);
+      w.poly([a.x, a.y - wallH, b.x, b.y - wallH, b.x - 4, b.y - wallH + 4, a.x - 4, a.y - wallH + 4]).fill(WALL_TOP);
+      w.poly([a.x, a.y - 6,     b.x, b.y - 6,     b.x, b.y, a.x, a.y]).fill(WALL_TRIM);
+      this.addChild(w);
+    };
 
-    // BACK-RIGHT wall.
+    drawLeftSeg(0, 4);
+    drawLeftSeg(5, ROOM_ROWS);
+
+    // BACK-RIGHT wall (full, no gap)
     {
       const a = isoToScreen(0, 0);
       const b = isoToScreen(ROOM_COLS, 0);
-      const wall = new Graphics();
-      wall.poly([
-        a.x, a.y - wallH,
-        b.x, b.y - wallH,
-        b.x, b.y,
-        a.x, a.y,
-      ]).fill(WALL_BACK);
-      wall.poly([
-        a.x, a.y - wallH,
-        b.x, b.y - wallH,
-        b.x + 4, b.y - wallH + 4,
-        a.x + 4, a.y - wallH + 4,
-      ]).fill(WALL_TOP);
-      wall.poly([
-        a.x, a.y - 6,
-        b.x, b.y - 6,
-        b.x, b.y,
-        a.x, a.y,
-      ]).fill(WALL_TRIM);
-      this.addChild(wall);
+      const w = new Graphics();
+      w.poly([a.x, a.y - wallH, b.x, b.y - wallH, b.x, b.y, a.x, a.y]).fill(WALL_BACK);
+      w.poly([a.x, a.y - wallH, b.x, b.y - wallH, b.x + 4, b.y - wallH + 4, a.x + 4, a.y - wallH + 4]).fill(WALL_TOP);
+      w.poly([a.x, a.y - 6,     b.x, b.y - 6,     b.x, b.y, a.x, a.y]).fill(WALL_TRIM);
+      this.addChild(w);
     }
   }
 
-  private drawDoor() {
+  private drawCorridor() {
+    const halfW = ISO_TILE_W / 2;
+    const halfH = ISO_TILE_H / 2;
+    const c = isoToScreen(-1, 4);
     const g = new Graphics();
-    const doorBottom = isoToScreen(0, 5);
-    const doorH = 78;
-    const doorW = 28;
     g.poly([
-      doorBottom.x - doorW, doorBottom.y - 14 - doorH,
-      doorBottom.x - doorW, doorBottom.y - 14,
-      doorBottom.x, doorBottom.y - 14 + 14,
-      doorBottom.x, doorBottom.y - 14 - doorH + 14,
-    ]).fill(TILE_DOOR_COLOR);
-    g.circle(doorBottom.x - 5, doorBottom.y - 14 - doorH / 2 + 6, 1.5).fill(0xffd700);
+      c.x,        c.y - halfH,
+      c.x + halfW, c.y,
+      c.x,        c.y + halfH,
+      c.x - halfW, c.y,
+    ]).fill(0x1a1a22);
     this.addChild(g);
   }
 }
