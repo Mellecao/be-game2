@@ -39,7 +39,7 @@ export class NPC extends Container {
 
     const sprite = new Sprite(tex);
     sprite.anchor.set(0.5, 1);
-    sprite.scale.set(2.0);
+    sprite.scale.set(2.4);
     n.addChild(sprite);
 
     const label = new Text({

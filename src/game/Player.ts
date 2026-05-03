@@ -62,7 +62,7 @@ export class Player extends Container {
 
     p.sprite = new Sprite(p.idleTextures.front[0]);
     p.sprite.anchor.set(0.5, 1);
-    p.sprite.scale.set(2.0);
+    p.sprite.scale.set(2.4);
     p.addChild(p.sprite);
 
     p.bindInput();
@@ -142,6 +142,6 @@ export class Player extends Container {
       ? this.walkTextures[dirKey][this.walkFrame[dirKey]]
       : this.idleTextures[dirKey][this.idleFrame[dirKey]];
 
-    this.sprite.scale.x = 2.0 * flip;
+    this.sprite.scale.x = 2.4 * flip;
   }
 }
