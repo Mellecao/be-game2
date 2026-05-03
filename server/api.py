@@ -40,6 +40,81 @@ class FurnitureItem(BaseModel):
     removed: bool = False
 
 
+class AgentUpdate(BaseModel):
+    display_name: str | None = None
+    role: str | None = None
+    goal: str | None = None
+    backstory: str | None = None
+    col: float | None = None
+    row: float | None = None
+
+AGENT_SEED = [
+    {
+        "id": "copywriter",
+        "display_name": "Copywriter",
+        "role": "Copywriter de Landing Pages",
+        "goal": "Conversar com o usuario para entender briefings de landing pages e gerar textos persuasivos quando solicitado.",
+        "backstory": "Voce e um copywriter senior da Black Elephant, especializado em landing pages para empresas de tecnologia.",
+        "col": 7.0,
+        "row": 3.0,
+        "sprite_char": 3,
+    },
+    {
+        "id": "vendedor",
+        "display_name": "Vendedor",
+        "role": "Consultor de Vendas",
+        "goal": "Identificar oportunidades de negocio e ajudar a fechar contratos com clientes potenciais.",
+        "backstory": "Voce e um consultor de vendas experiente da Black Elephant, focado em sites e apps para pequenas empresas.",
+        "col": 3.0,
+        "row": 3.0,
+        "sprite_char": 2,
+    },
+    {
+        "id": "programador",
+        "display_name": "Programador",
+        "role": "Desenvolvedor Full-Stack",
+        "goal": "Implementar solucoes tecnicas de alta qualidade para os projetos da empresa.",
+        "backstory": "Voce e um desenvolvedor senior da Black Elephant com expertise em TypeScript, Python e integrações de API.",
+        "col": 5.0,
+        "row": 6.0,
+        "sprite_char": 2,
+    },
+    {
+        "id": "planner",
+        "display_name": "Planner",
+        "role": "Gerente de Projetos",
+        "goal": "Analisar tarefas, decompor em subtarefas e delegar para os agentes mais adequados.",
+        "backstory": "Voce e o gerente de projetos da Black Elephant, responsavel por orquestrar os outros agentes e garantir que as tarefas sejam concluidas com eficiencia.",
+        "col": 8.0,
+        "row": 6.0,
+        "sprite_char": 2,
+    },
+]
+
+def _ensure_agents_seed(db):
+    result = db.table("agents").select("id").limit(1).execute()
+    if not result.data:
+        db.table("agents").insert(AGENT_SEED).execute()
+
+
+@app.get("/api/agents")
+def get_agents():
+    db = get_supabase()
+    _ensure_agents_seed(db)
+    result = db.table("agents").select("id,display_name,role,goal,backstory,col,row,sprite_char").execute()
+    return result.data
+
+
+@app.put("/api/agents/{agent_id}")
+def update_agent(agent_id: str, update: AgentUpdate):
+    db = get_supabase()
+    payload = update.model_dump(exclude_unset=True)
+    if not payload:
+        return {"ok": True}
+    db.table("agents").update(payload).eq("id", agent_id).execute()
+    return {"ok": True}
+
+
 class InventoryAction(BaseModel):
     item_id: str
     owner_id: str | None = None
