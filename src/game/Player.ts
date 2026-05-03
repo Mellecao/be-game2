@@ -6,18 +6,18 @@ import { CollisionMap } from "./CollisionMap";
 type Dir = "front" | "back" | "left" | "right";
 
 const WALK_FPS = 8;
-const TICKS_PER_FRAME = 60 / WALK_FPS;
+const IDLE_FPS = 4;
 
 export class Player extends Container {
   private sprite!: Sprite;
   private shadow!: Sprite;
 
-  private idleTextures: Record<string, Texture> = {};
+  private idleTextures: Record<string, Texture[]> = { front: [], back: [], side: [] };
   private walkTextures: Record<string, Texture[]> = { front: [], back: [], side: [] };
 
   private dir: Dir = "front";
-  private walkFrame = 0;
-  private walkTimer = 0;
+  private frame = 0;
+  private frameTimer = 0;
 
   worldCol = 5;
   worldRow = 5;
@@ -28,23 +28,23 @@ export class Player extends Container {
   static async load(): Promise<Player> {
     const p = new Player();
 
-    const [shadowTex, fi, bi, si, ...walkFrames] = await Promise.all([
+    const all = await Promise.all([
       Assets.load(ASSETS.shadow),
-      Assets.load("/avatar/front_1_iddle.png"),
-      Assets.load("/avatar/back_1_iddle.png"),
-      Assets.load("/avatar/side_1_iddle.png"),
+      ...[1, 2, 3, 4, 5].map((i) => Assets.load(`/avatar/front_${i}_iddle.png`)),
+      ...[1, 2, 3, 4, 5].map((i) => Assets.load(`/avatar/back_${i}_iddle.png`)),
+      ...[1, 2, 3, 4, 5].map((i) => Assets.load(`/avatar/side_${i}_iddle.png`)),
       ...[1, 2, 3, 4, 5].map((i) => Assets.load(`/avatar/front_${i}_walking.png`)),
       ...[1, 2, 3, 4, 5].map((i) => Assets.load(`/avatar/back_${i}_walking.png`)),
       ...[1, 2, 3, 4, 5].map((i) => Assets.load(`/avatar/side_${i}_walking.png`)),
     ]);
 
-    p.idleTextures.front = fi;
-    p.idleTextures.back  = bi;
-    p.idleTextures.side  = si;
-
-    p.walkTextures.front = walkFrames.slice(0, 5);
-    p.walkTextures.back  = walkFrames.slice(5, 10);
-    p.walkTextures.side  = walkFrames.slice(10, 15);
+    const [shadowTex, ...rest] = all;
+    p.idleTextures.front = rest.slice(0,  5);
+    p.idleTextures.back  = rest.slice(5,  10);
+    p.idleTextures.side  = rest.slice(10, 15);
+    p.walkTextures.front = rest.slice(15, 20);
+    p.walkTextures.back  = rest.slice(20, 25);
+    p.walkTextures.side  = rest.slice(25, 30);
 
     p.shadow = new Sprite(shadowTex);
     p.shadow.anchor.set(0.5, 0.5);
@@ -53,7 +53,7 @@ export class Player extends Container {
     p.shadow.scale.set(1.1, 0.75);
     p.addChild(p.shadow);
 
-    p.sprite = new Sprite(p.idleTextures.front);
+    p.sprite = new Sprite(p.idleTextures.front[0]);
     p.sprite.anchor.set(0.5, 1);
     p.sprite.scale.set(2.0);
     p.addChild(p.sprite);
@@ -72,10 +72,10 @@ export class Player extends Container {
     let sx = 0;
     let sy = 0;
 
-    if (this.keys["w"] || this.keys["arrowup"])    sy -= 1;
-    if (this.keys["s"] || this.keys["arrowdown"])   sy += 1;
-    if (this.keys["a"] || this.keys["arrowleft"])   sx -= 1;
-    if (this.keys["d"] || this.keys["arrowright"])  sx += 1;
+    if (this.keys["w"] || this.keys["arrowup"])   sy -= 1;
+    if (this.keys["s"] || this.keys["arrowdown"])  sy += 1;
+    if (this.keys["a"] || this.keys["arrowleft"])  sx -= 1;
+    if (this.keys["d"] || this.keys["arrowright"]) sx += 1;
 
     const moving = sx !== 0 || sy !== 0;
 
@@ -99,15 +99,13 @@ export class Player extends Container {
       } else {
         this.dir = sy > 0 ? "front" : "back";
       }
+    }
 
-      this.walkTimer += dt;
-      if (this.walkTimer >= TICKS_PER_FRAME) {
-        this.walkTimer -= TICKS_PER_FRAME;
-        this.walkFrame = (this.walkFrame + 1) % 5;
-      }
-    } else {
-      this.walkFrame = 0;
-      this.walkTimer = 0;
+    const fps = moving ? WALK_FPS : IDLE_FPS;
+    this.frameTimer += dt;
+    if (this.frameTimer >= 60 / fps) {
+      this.frameTimer -= 60 / fps;
+      this.frame = (this.frame + 1) % 5;
     }
 
     this.updateSprite(moving);
@@ -125,8 +123,8 @@ export class Player extends Container {
     const flip   = this.dir === "left" ? -1 : 1;
 
     this.sprite.texture = walking
-      ? this.walkTextures[dirKey][this.walkFrame]
-      : this.idleTextures[dirKey];
+      ? this.walkTextures[dirKey][this.frame]
+      : this.idleTextures[dirKey][this.frame];
 
     this.sprite.scale.x = 2.0 * flip;
   }
