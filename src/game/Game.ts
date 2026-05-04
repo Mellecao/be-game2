@@ -96,7 +96,7 @@ export class Game {
   agentEditor!: AgentEditor;
   collision!: CollisionMap;
   private onNpcClick: NPCClickHandler | null = null;
-  private remotePlayers = new Map<string, RemotePlayer>()
+  private remotePlayers = new Map<string, RemotePlayer | null>()
   private mp: MultiplayerService | null = null
 
   constructor(app: Application) {
@@ -207,17 +207,22 @@ export class Game {
       this.mp = mp
 
       mp.onPlayerJoined = async (data) => {
+        this.remotePlayers.set(data.id, null)
         const rp = await RemotePlayer.load(data)
+        if (!this.remotePlayers.has(data.id)) {
+          rp.destroy()
+          return
+        }
         this.world.addChild(rp)
         this.remotePlayers.set(data.id, rp)
       }
 
       mp.onPlayerLeft = (id) => {
         const rp = this.remotePlayers.get(id)
+        this.remotePlayers.delete(id)
         if (rp) {
           this.world.removeChild(rp)
           rp.destroy()
-          this.remotePlayers.delete(id)
         }
       }
 
@@ -332,7 +337,7 @@ export class Game {
   private update(dt: number) {
     this.player.update(dt);
     for (const npc of this.npcs) npc.update(dt);
-    for (const rp of this.remotePlayers.values()) rp.update(dt);
+    for (const rp of this.remotePlayers.values()) rp?.update(dt);
     this.mp?.sendPosition(this.player.worldCol, this.player.worldRow, this.player.currentDir);
     this.sortDepth();
   }
@@ -340,7 +345,7 @@ export class Game {
   private sortDepth() {
     const items: { obj: Container; y: number }[] = [
       { obj: this.player, y: this.player.y },
-      ...[...this.remotePlayers.values()].map((rp) => ({ obj: rp as Container, y: rp.y })),
+      ...[...this.remotePlayers.values()].flatMap((rp) => rp ? [{ obj: rp as Container, y: rp.y }] : []),
       ...this.npcs.map((n) => ({ obj: n as Container, y: n.y })),
       ...this.furniture.map((f) => ({ obj: f as Container, y: f.y })),
     ];
