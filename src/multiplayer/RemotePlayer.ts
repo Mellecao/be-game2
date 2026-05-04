@@ -18,6 +18,7 @@ const TINTS: Record<number, number> = {
 
 export class RemotePlayer extends Container {
   private sprite!: Sprite
+  private nameLabel!: Text
   private idleTextures: Record<DirKey, Texture[]> = { front: [], back: [], side: [] }
   private walkTextures: Record<DirKey, Texture[]> = { front: [], back: [], side: [] }
 
@@ -69,7 +70,7 @@ export class RemotePlayer extends Container {
     rp.sprite.tint = TINTS[data.spriteChar] ?? 0xffffff
     rp.addChild(rp.sprite)
 
-    const label = new Text({
+    rp.nameLabel = new Text({
       text: data.name,
       style: new TextStyle({
         fontSize: 12,
@@ -78,9 +79,9 @@ export class RemotePlayer extends Container {
         stroke: { color: 0x000000, width: 3 },
       }),
     })
-    label.anchor.set(0.5, 1)
-    label.y = -(rp.sprite.height + 6)
-    rp.addChild(label)
+    rp.nameLabel.anchor.set(0.5, 1)
+    rp.nameLabel.y = -(rp.sprite.height + 6)
+    rp.addChild(rp.nameLabel)
 
     rp.syncScreen()
     return rp
@@ -124,6 +125,7 @@ export class RemotePlayer extends Container {
       ? this.walkTextures[this.dirKey][this.walkFrame[this.dirKey]]
       : this.idleTextures[this.dirKey][this.idleFrame[this.dirKey]]
     this.sprite.scale.x = 2.64 * this.flip
+    this.nameLabel.y = -(this.sprite.height + 6)
 
     this.syncScreen()
   }
@@ -132,5 +134,9 @@ export class RemotePlayer extends Container {
     const pos = isoToScreen(this.worldCol, this.worldRow)
     this.x = pos.x
     this.y = pos.y
+  }
+
+  override destroy(): void {
+    super.destroy({ children: true, texture: false, textureSource: false })
   }
 }
