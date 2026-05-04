@@ -1,6 +1,6 @@
 const STORAGE_KEY = 'be-game-identity'
 
-interface Identity {
+export interface Identity {
   id: string
   name: string
   spriteChar: number
@@ -72,7 +72,11 @@ export class NicknameModal {
           name,
           spriteChar: Math.ceil(Math.random() * 4),
         }
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(identity))
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(identity))
+        } catch {
+          // Storage unavailable (private mode, quota). Game continues without persisting.
+        }
         overlay.remove()
         resolve(identity)
       }
