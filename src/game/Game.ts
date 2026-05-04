@@ -9,6 +9,8 @@ import { FurnitureEditor } from "./FurnitureEditor";
 import { ASSETS } from "./constants";
 import { CollisionMap } from "./CollisionMap";
 import { ROOM_COLS, ROOM_ROWS, WALL_HEIGHT, isoToScreen } from "./iso";
+import { MultiplayerService } from '../multiplayer/MultiplayerService'
+import { RemotePlayer } from '../multiplayer/RemotePlayer'
 
 export type NPCClickHandler = (npc: NPC) => void;
 
@@ -94,12 +96,14 @@ export class Game {
   agentEditor!: AgentEditor;
   collision!: CollisionMap;
   private onNpcClick: NPCClickHandler | null = null;
+  private remotePlayers = new Map<string, RemotePlayer>()
+  private mp: MultiplayerService | null = null
 
   constructor(app: Application) {
     this.app = app;
   }
 
-  async init(container: HTMLElement) {
+  async init(container: HTMLElement, mp?: MultiplayerService) {
     container.appendChild(this.app.canvas);
 
     this.world = new Container();
@@ -197,6 +201,29 @@ export class Game {
       }
     } catch (err) {
       console.error("[Game] Failed to load agents:", err);
+    }
+
+    if (mp) {
+      this.mp = mp
+
+      mp.onPlayerJoined = async (data) => {
+        const rp = await RemotePlayer.load(data)
+        this.world.addChild(rp)
+        this.remotePlayers.set(data.id, rp)
+      }
+
+      mp.onPlayerLeft = (id) => {
+        const rp = this.remotePlayers.get(id)
+        if (rp) {
+          this.world.removeChild(rp)
+          rp.destroy()
+          this.remotePlayers.delete(id)
+        }
+      }
+
+      mp.onPlayerMoved = (id, col, row, dir) => {
+        this.remotePlayers.get(id)?.setTarget(col, row, dir)
+      }
     }
 
     this.handleResize();
@@ -305,12 +332,15 @@ export class Game {
   private update(dt: number) {
     this.player.update(dt);
     for (const npc of this.npcs) npc.update(dt);
+    for (const rp of this.remotePlayers.values()) rp.update(dt);
+    this.mp?.sendPosition(this.player.worldCol, this.player.worldRow, this.player.currentDir);
     this.sortDepth();
   }
 
   private sortDepth() {
     const items: { obj: Container; y: number }[] = [
       { obj: this.player, y: this.player.y },
+      ...[...this.remotePlayers.values()].map((rp) => ({ obj: rp as Container, y: rp.y })),
       ...this.npcs.map((n) => ({ obj: n as Container, y: n.y })),
       ...this.furniture.map((f) => ({ obj: f as Container, y: f.y })),
     ];
