@@ -6,8 +6,12 @@ import { InventoryPanel } from "./ui/InventoryPanel";
 import { AgentPanel } from "./ui/AgentPanel";
 import { AgentConfigModal } from "./ui/AgentConfigModal";
 import { ASSETS } from "./game/constants";
+import { NicknameModal } from "./ui/NicknameModal";
+import { MultiplayerService } from "./multiplayer/MultiplayerService";
 
 async function bootstrap() {
+  const identity = await NicknameModal.getOrPrompt();
+
   const app = new Application();
   await app.init({
     width: window.innerWidth,
@@ -20,8 +24,11 @@ async function bootstrap() {
   const container = document.getElementById("game-container");
   if (!container) throw new Error("game-container nao encontrado");
 
+  const mp = new MultiplayerService();
+  await mp.connect(identity.id, identity.name, identity.spriteChar);
+
   const game = new Game(app);
-  await game.init(container);
+  await game.init(container, mp);
 
   const chat = new ChatPanel();
 
