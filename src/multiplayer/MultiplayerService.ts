@@ -1,6 +1,7 @@
 import { createClient, SupabaseClient, RealtimeChannel } from '@supabase/supabase-js'
 
 export type RemotePlayerData = { id: string; name: string; spriteChar: number }
+type PresenceMeta = { name: string; spriteChar: number }
 
 export class MultiplayerService {
   onPlayerJoined: ((data: RemotePlayerData) => void) | null = null
@@ -23,14 +24,19 @@ export class MultiplayerService {
   async connect(playerId: string, name: string, spriteChar: number): Promise<void> {
     this.myId = playerId
 
+    if (this.channel !== null) {
+      console.warn('[MultiplayerService] connect() called while already connected — ignoring')
+      return
+    }
+
     this.channel = this.supabase.channel('room:main', {
       config: { presence: { key: playerId } },
     })
 
     this.channel
-      .on('presence', { event: 'join' }, ({ key, newPresences }) => {
+      .on<PresenceMeta>('presence', { event: 'join' }, ({ key, newPresences }) => {
         if (key === this.myId) return
-        const p = (newPresences as any[])[0]
+        const p = newPresences[0]
         this.onPlayerJoined?.({ id: key, name: p.name, spriteChar: p.spriteChar })
       })
       .on('presence', { event: 'leave' }, ({ key }) => {
@@ -43,12 +49,16 @@ export class MultiplayerService {
       })
 
     await new Promise<void>((resolve) => {
-      this.channel!.subscribe(async (status) => {
+      this.channel!.subscribe(async (status, err) => {
+        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          console.error('[MultiplayerService] subscription failed', status, err)
+          return
+        }
         if (status !== 'SUBSCRIBED') return
         await this.channel!.track({ name, spriteChar })
 
         // Announce players already present in the room
-        const state = this.channel!.presenceState<{ name: string; spriteChar: number }>()
+        const state = this.channel!.presenceState<PresenceMeta>()
         for (const [key, presences] of Object.entries(state)) {
           if (key === playerId) continue
           const p = presences[0]
@@ -74,7 +84,10 @@ export class MultiplayerService {
   }
 
   disconnect(): void {
-    if (this.intervalId !== null) clearInterval(this.intervalId)
+    if (this.intervalId !== null) {
+      clearInterval(this.intervalId)
+      this.intervalId = null
+    }
     if (this.channel) this.supabase.removeChannel(this.channel)
     this.channel = null
   }
