@@ -48,10 +48,11 @@ export class MultiplayerService {
         this.onPlayerMoved?.(payload.id, payload.col, payload.row, payload.dir)
       })
 
-    await new Promise<void>((resolve) => {
+    await new Promise<void>((resolve, reject) => {
       this.channel!.subscribe(async (status, err) => {
         if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
           console.error('[MultiplayerService] subscription failed', status, err)
+          reject(new Error(`Subscription failed: ${status}`))
           return
         }
         if (status !== 'SUBSCRIBED') return
