@@ -27,41 +27,46 @@ async function bootstrap() {
   const mp = new MultiplayerService();
   await mp.connect(identity.id, identity.name, identity.spriteChar);
 
-  const game = new Game(app);
-  await game.init(container, mp);
+  try {
+    const game = new Game(app);
+    await game.init(container, mp);
 
-  const chat = new ChatPanel();
+    const chat = new ChatPanel();
 
-  game.setNpcClickHandler((npc) => {
-    chat.open({
-      id: npc.id,
-      name: npc.displayName,
-      portraitUrl: ASSETS.portraitNpc,
+    game.setNpcClickHandler((npc) => {
+      chat.open({
+        id: npc.id,
+        name: npc.displayName,
+        portraitUrl: ASSETS.portraitNpc,
+      });
     });
-  });
 
-  const inventory = new InventoryPanel(
-    () => game.getFurnitureList(),
-    (itemId) => game.spawnFurniture(itemId),
-    (itemId) => game.removeFurniture(itemId)
-  );
+    const inventory = new InventoryPanel(
+      () => game.getFurnitureList(),
+      (itemId) => game.spawnFurniture(itemId),
+      (itemId) => game.removeFurniture(itemId)
+    );
 
-  new BuildingPanel(
-    (active) => {
-      game.setBuilding(active);
-      active ? inventory.show() : inventory.hide();
-    },
-    () => game.saveLayout(),
-    (on) => game.setRemoveWalls(on)
-  );
+    new BuildingPanel(
+      (active) => {
+        game.setBuilding(active);
+        active ? inventory.show() : inventory.hide();
+      },
+      () => game.saveLayout(),
+      (on) => game.setRemoveWalls(on)
+    );
 
-  const agentModal = new AgentConfigModal();
+    const agentModal = new AgentConfigModal();
 
-  new AgentPanel((active) => {
-    game.setAgentMode(active);
-  });
+    new AgentPanel((active) => {
+      game.setAgentMode(active);
+    });
 
-  game.agentEditor.onSelect = (npc) => agentModal.open(npc);
+    game.agentEditor.onSelect = (npc) => agentModal.open(npc);
+  } catch (err) {
+    mp.disconnect();
+    throw err;
+  }
 }
 
 bootstrap().catch((err) => {
