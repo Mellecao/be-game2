@@ -1,17 +1,27 @@
 import os
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from crewai import Crew
 from dotenv import load_dotenv
 
-from .agents import create_copywriter
-from .tasks import create_chat_task
+from .agents import create_copywriter, create_developer
+from .tasks import create_chat_task, create_dev_task
 from .supabase_client import get_supabase
 
 load_dotenv()
 
-app = FastAPI(title="BE-Game Agent API")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    db = get_supabase()
+    _ensure_agents_seed(db)
+    _sync_agent_configs(db)
+    yield
+
+
+app = FastAPI(title="BE-Game Agent API", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -54,7 +64,7 @@ AGENT_SEED = [
         "display_name": "Copywriter",
         "role": "Copywriter de Landing Pages",
         "goal": "Conversar com o usuario para entender briefings de landing pages e gerar textos persuasivos quando solicitado.",
-        "backstory": "Voce e um copywriter senior da Black Elephant, especializado em landing pages para empresas de tecnologia.",
+        "backstory": "Voce e um copywriter senior da Black Elephant, especializado em landing pages para empresas de tecnologia. Conversa de forma direta e amigavel, em portugues brasileiro. Quando o usuario pedir uma copy, estrutura em Markdown com headline, hero, beneficios, CTA e FAQ.",
         "col": 7.0,
         "row": 3.0,
         "sprite_char": 3,
@@ -72,9 +82,9 @@ AGENT_SEED = [
     {
         "id": "programador",
         "display_name": "Programador",
-        "role": "Desenvolvedor Full-Stack",
-        "goal": "Implementar solucoes tecnicas de alta qualidade para os projetos da empresa.",
-        "backstory": "Voce e um desenvolvedor senior da Black Elephant com expertise em TypeScript, Python e integrações de API.",
+        "role": "Desenvolvedor Full-Stack / Creative Technologist",
+        "goal": "Entender o que o usuario quer construir e usar a ferramenta open_claude_cli para criar a pasta e iniciar o Claude CLI com um prompt detalhado de desenvolvimento.",
+        "backstory": "Voce e um desenvolvedor criativo da Black Elephant especializado em sites institucionais imersivos com Three.js, GSAP e WebGL. Quando o usuario descreve um projeto, voce entende o pedido, gera um slug kebab-case, monta um prompt tecnico completo em ingles e usa a ferramenta open_claude_cli para executar. Responde em portugues brasileiro de forma direta e animada.",
         "col": 5.0,
         "row": 6.0,
         "sprite_char": 2,
@@ -91,16 +101,25 @@ AGENT_SEED = [
     },
 ]
 
+# Campos que devem ser mantidos sincronizados com o código (não inclui col/row/sprite_char)
+_AGENT_CONFIG_FIELDS = ["role", "goal", "backstory", "display_name"]
+
 def _ensure_agents_seed(db):
-    result = db.table("agents").select("id").limit(1).execute()
-    if not result.data:
-        db.table("agents").insert(AGENT_SEED).execute()
+    existing = {r["id"] for r in db.table("agents").select("id").execute().data}
+    to_insert = [a for a in AGENT_SEED if a["id"] not in existing]
+    if to_insert:
+        db.table("agents").insert(to_insert).execute()
+
+def _sync_agent_configs(db):
+    """Atualiza role/goal/backstory dos agentes para bater com o código."""
+    for agent in AGENT_SEED:
+        payload = {k: agent[k] for k in _AGENT_CONFIG_FIELDS if k in agent}
+        db.table("agents").update(payload).eq("id", agent["id"]).execute()
 
 
 @app.get("/api/agents")
 def get_agents():
     db = get_supabase()
-    _ensure_agents_seed(db)
     result = db.table("agents").select("id,display_name,role,goal,backstory,col,row,sprite_char").execute()
     return result.data
 
@@ -205,13 +224,16 @@ def chat(req: ChatRequest):
     if not req.message.strip():
         raise HTTPException(status_code=400, detail="Mensagem vazia")
 
-    if req.npc_id != "copywriter":
-        raise HTTPException(status_code=404, detail=f"NPC desconhecido: {req.npc_id}")
+    if req.npc_id == "copywriter":
+        agent = create_copywriter()
+        task = create_chat_task(agent, req.message)
+    elif req.npc_id == "programador":
+        agent = create_developer()
+        task = create_dev_task(agent, req.message)
+    else:
+        raise HTTPException(status_code=404, detail=f"NPC sem handler de chat: {req.npc_id}")
 
-    agent = create_copywriter()
-    task = create_chat_task(agent, req.message)
     crew = Crew(agents=[agent], tasks=[task], verbose=False)
-
     result = crew.kickoff()
     return ChatResponse(response=str(result), npc_id=req.npc_id)
 

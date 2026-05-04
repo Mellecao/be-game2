@@ -2,6 +2,8 @@ import { Application, Container } from "pixi.js";
 import { Room } from "./Room";
 import { Player } from "./Player";
 import { NPC } from "./NPC";
+import { AgentEditor } from "./AgentEditor";
+import { AgentData } from "./NPC";
 import { NitroFurniture } from "./NitroFurniture";
 import { FurnitureEditor } from "./FurnitureEditor";
 import { ASSETS } from "./constants";
@@ -89,6 +91,7 @@ export class Game {
   npcs: NPC[] = [];
   furniture: NitroFurniture[] = [];
   private editor!: FurnitureEditor;
+  agentEditor!: AgentEditor;
   collision!: CollisionMap;
   private onNpcClick: NPCClickHandler | null = null;
 
@@ -174,12 +177,27 @@ export class Game {
     this.player.collisionMap = this.collision;
     this.world.addChild(this.player);
 
-    const copywriter = await NPC.create("copywriter", "Copywriter", 7, 3);
-    copywriter.on("pointerdown", () => {
-      if (this.onNpcClick) this.onNpcClick(copywriter);
-    });
-    this.world.addChild(copywriter);
-    this.npcs.push(copywriter);
+    this.agentEditor = new AgentEditor(this.app, this.world);
+
+    try {
+      const res = await fetch("/api/agents");
+      if (res.ok) {
+        const agents = (await res.json()) as AgentData[];
+        for (const data of agents) {
+          const npc = await NPC.fromAgentData(data);
+          this.agentEditor.register(npc);
+          npc.on("pointerdown", () => {
+            if (!this.agentEditor.isActive && this.onNpcClick) {
+              this.onNpcClick(npc);
+            }
+          });
+          this.world.addChild(npc);
+          this.npcs.push(npc);
+        }
+      }
+    } catch (err) {
+      console.error("[Game] Failed to load agents:", err);
+    }
 
     this.handleResize();
     window.addEventListener("resize", () => this.handleResize());
@@ -192,6 +210,10 @@ export class Game {
 
   setRemoveWalls(on: boolean) {
     this.editor.setRemoveWallsMode(on);
+  }
+
+  setAgentMode(active: boolean) {
+    this.agentEditor.setActive(active);
   }
 
   getFurnitureList(): NitroFurniture[] {
@@ -300,6 +322,7 @@ export class Game {
       );
     });
     this.editor.bringToFront();
+    this.agentEditor.bringToFront();
   }
 
   setNpcClickHandler(handler: NPCClickHandler) {

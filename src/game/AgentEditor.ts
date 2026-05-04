@@ -31,11 +31,12 @@ export class AgentEditor {
     });
   }
 
+  get isActive(): boolean {
+    return this.active;
+  }
+
   setActive(active: boolean) {
     this.active = active;
-    for (const npc of this.npcs) {
-      npc.eventMode = active ? "static" : "none";
-    }
     if (!active) this.deselect();
   }
 
