@@ -3,6 +3,8 @@ import { Game } from "./game/Game";
 import { ChatPanel } from "./ui/ChatPanel";
 import { BuildingPanel } from "./ui/BuildingPanel";
 import { InventoryPanel } from "./ui/InventoryPanel";
+import { AgentPanel } from "./ui/AgentPanel";
+import { AgentConfigModal } from "./ui/AgentConfigModal";
 import { ASSETS } from "./game/constants";
 
 async function bootstrap() {
@@ -45,6 +47,14 @@ async function bootstrap() {
     () => game.saveLayout(),
     (on) => game.setRemoveWalls(on)
   );
+
+  const agentModal = new AgentConfigModal();
+
+  new AgentPanel((active) => {
+    game.setAgentMode(active);
+  });
+
+  game.agentEditor.onSelect = (npc) => agentModal.open(npc);
 }
 
 bootstrap().catch((err) => {

@@ -34,7 +34,29 @@ create table if not exists public.furniture_placements (
     removed   boolean not null default false
 );
 
+-- Inventário do jogador
+create table if not exists public.inventory_items (
+    id       bigserial primary key,
+    item_id  text not null,
+    quantity integer not null default 0 check (quantity >= 0),
+    owner_id text
+);
+
+-- Agentes (NPCs configuráveis com CrewAI)
+create table if not exists public.agents (
+    id           text primary key,
+    display_name text not null,
+    role         text not null default '',
+    goal         text not null default '',
+    backstory    text not null default '',
+    col          float not null default 5,
+    row          float not null default 4,
+    sprite_char  integer not null default 1 check (sprite_char between 1 and 5)
+);
+
 -- RLS desabilitado (v1 sem auth)
 alter table public.players disable row level security;
 alter table public.chat_messages disable row level security;
 alter table public.furniture_placements disable row level security;
+alter table public.inventory_items disable row level security;
+alter table public.agents disable row level security;

@@ -22,7 +22,7 @@ export class NPC extends Container {
   public worldCol: number;
   public worldRow: number;
 
-  private label!: Text;
+  private nameLabel!: Text;
   private indicator!: Graphics;
   private indicatorBaseY = 0;
   private time = 0;
@@ -73,7 +73,7 @@ export class NPC extends Container {
     });
     label.anchor.set(0.5, 1);
     label.y = -sprite.height - 22;
-    n.label = label;
+    n.nameLabel = label;
     n.addChild(label);
 
     const indicator = new Graphics();
@@ -95,7 +95,7 @@ export class NPC extends Container {
 
   updateLabel(name: string) {
     this.displayName = name;
-    this.label.text = name;
+    this.nameLabel.text = name;
   }
 
   update(dt: number) {
