@@ -1,5 +1,13 @@
 const STORAGE_KEY = 'be-game-identity'
 
+function generateId(): string {
+  if (typeof crypto.randomUUID === 'function') return crypto.randomUUID()
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (crypto.getRandomValues(new Uint8Array(1))[0] & 15) >> (c === 'x' ? 0 : 1)
+    return (c === 'x' ? r : (r & 0x3) | 0x8).toString(16)
+  })
+}
+
 export interface Identity {
   id: string
   name: string
@@ -68,7 +76,7 @@ export class NicknameModal {
         const name = input.value.trim()
         if (!name) return
         const identity: Identity = {
-          id: crypto.randomUUID(),
+          id: generateId(),
           name,
           spriteChar: Math.ceil(Math.random() * 4),
         }
