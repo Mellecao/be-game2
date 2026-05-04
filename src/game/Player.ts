@@ -20,6 +20,10 @@ export class Player extends Container {
 
   private dir: Dir = "front";
 
+  get currentDir(): string {
+    return this.dir;
+  }
+
   // Each direction key has its own independent frame counter
   private idleFrame:  Record<DirKey, number> = { front: 0, back: 0, side: 0 };
   private idleTimer:  Record<DirKey, number> = { front: 0, back: 0, side: 0 };
