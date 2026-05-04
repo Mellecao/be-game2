@@ -207,14 +207,19 @@ export class Game {
       this.mp = mp
 
       mp.onPlayerJoined = async (data) => {
-        this.remotePlayers.set(data.id, null)
-        const rp = await RemotePlayer.load(data)
-        if (!this.remotePlayers.has(data.id)) {
-          rp.destroy()
-          return
+        try {
+          this.remotePlayers.set(data.id, null)
+          const rp = await RemotePlayer.load(data)
+          if (!this.remotePlayers.has(data.id)) {
+            rp.destroy()
+            return
+          }
+          this.world.addChild(rp)
+          this.remotePlayers.set(data.id, rp)
+        } catch (err) {
+          console.error('[Game] RemotePlayer.load failed for', data.id, err)
+          this.remotePlayers.delete(data.id)
         }
-        this.world.addChild(rp)
-        this.remotePlayers.set(data.id, rp)
       }
 
       mp.onPlayerLeft = (id) => {

@@ -50,8 +50,10 @@ export class MultiplayerService {
 
     await new Promise<void>((resolve, reject) => {
       this.channel!.subscribe(async (status, err) => {
-        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
           console.error('[MultiplayerService] subscription failed', status, err)
+          this.supabase.removeChannel(this.channel!)
+          this.channel = null
           reject(new Error(`Subscription failed: ${status}`))
           return
         }
