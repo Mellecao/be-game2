@@ -23,6 +23,11 @@ NUNCA peça confirmação, aprovação ou revisão antes de implementar.
 NUNCA entre em modo de planejamento (Plan Mode).
 
 Implemente IMEDIATAMENTE e DIRETAMENTE tudo que for pedido, sem perguntas.
+
+PASSO FINAL OBRIGATÓRIO: Após concluir toda a implementação, crie um arquivo
+chamado `.claude-done` nesta pasta com o conteúdo "done".
+Use a ferramenta Write: path=".claude-done", content="done".
+Isso é OBRIGATÓRIO — é o sinal de que você terminou.
 """
 
 
@@ -53,17 +58,23 @@ class OpenClaudeCliTool(BaseTool):
             (project_dir / "CLAUDE.md").write_text(_CLAUDE_MD, encoding="utf-8")
             full_prompt = (
                 "IMPORTANTE: implemente tudo diretamente, sem pedir confirmação "
-                "e sem usar nenhuma skill de superpowers.\n\n" + prompt
+                "e sem usar nenhuma skill de superpowers.\n\n"
+                + prompt
+                + "\n\nPASSO FINAL OBRIGATÓRIO: crie o arquivo `.claude-done` nesta pasta "
+                "com conteúdo \"done\" usando a ferramenta Write."
             )
-            self._launch(project_dir, full_prompt)
+            done_event = threading.Event()
+            self._launch(project_dir, full_prompt, done_event)
+            print("[dev_tool] aguardando Claude terminar...")
+            done_event.wait()
             return (
-                f"Pasta criada: {project_dir.resolve()}\n"
-                f"Claude CLI iniciado no terminal. O site esta sendo construido."
+                f"Projeto '{project_slug}' concluido!\n"
+                f"Pasta: {project_dir.resolve()}"
             )
         except Exception as exc:
             return f"error: {exc}"
 
-    def _launch(self, project_dir: Path, prompt: str) -> None:
+    def _launch(self, project_dir: Path, prompt: str, done_event: threading.Event) -> None:
         def _focus_pid(pid: int) -> bool:
             try:
                 import win32gui
@@ -88,12 +99,39 @@ class OpenClaudeCliTool(BaseTool):
                 pass
             return False
 
+        proc_ref: list = [None]
+
+        def _watch_sentinel(done_event: threading.Event) -> None:
+            sentinel = project_dir / ".claude-done"
+            deadline = time.monotonic() + 5400  # 90 min max
+            while time.monotonic() < deadline:
+                if sentinel.exists():
+                    try:
+                        sentinel.unlink()
+                    except Exception:
+                        pass
+                    print(f"[dev_tool] Claude terminou — sentinel detectado em {project_dir}")
+                    done_event.set()
+                    time.sleep(60)
+                    proc = proc_ref[0]
+                    if proc:
+                        try:
+                            proc.terminate()
+                            print("[dev_tool] terminal fechado")
+                        except Exception:
+                            pass
+                    return
+                time.sleep(2)
+            print("[dev_tool] timeout — sentinel nao detectado em 30min")
+            done_event.set()
+
         def _automate() -> None:
             proc = subprocess.Popen(
                 ["powershell.exe", "-NoExit"],
                 cwd=str(project_dir),
                 creationflags=subprocess.CREATE_NEW_CONSOLE,
             )
+            proc_ref[0] = proc
             time.sleep(3)
             _focus_pid(proc.pid)
             time.sleep(0.5)
@@ -114,3 +152,4 @@ class OpenClaudeCliTool(BaseTool):
             pyautogui.press("enter")
 
         threading.Thread(target=_automate, daemon=True).start()
+        threading.Thread(target=_watch_sentinel, args=(done_event,), daemon=True).start()
