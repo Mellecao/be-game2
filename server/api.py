@@ -133,6 +133,46 @@ AGENT_SEED = [
         "row": 6.0,
         "sprite_char": 2,
     },
+    {
+        "id": "designer",
+        "display_name": "Designer",
+        "role": "UI/UX Designer e Diretor de Arte",
+        "goal": "Transformar copy em guia visual (paleta, tipografia, layout, animacoes) para orientar o Dev.",
+        "backstory": "Designer de sistemas visuais especializado em sites imersivos Three.js. Traduz emocao em estetica.",
+        "col": 2.0,
+        "row": 5.0,
+        "sprite_char": 3,
+    },
+    {
+        "id": "qa",
+        "display_name": "QA",
+        "role": "Engenheiro de Qualidade",
+        "goal": "Revisar codigo estaticamente e emitir STATUS: APROVADO ou REPROVADO.",
+        "backstory": "QA meticuloso. Analisa com checklist e nunca aprova sem evidencia.",
+        "col": 5.0,
+        "row": 2.0,
+        "sprite_char": 2,
+    },
+    {
+        "id": "devops",
+        "display_name": "DevOps",
+        "role": "Engenheiro DevOps",
+        "goal": "Push de projetos aprovados para GitHub e geracao de URL do repositorio.",
+        "backstory": "Nunca deixa codigo sem versionamento. Automatizou centenas de pipelines.",
+        "col": 9.0,
+        "row": 4.0,
+        "sprite_char": 2,
+    },
+    {
+        "id": "bibliotecario",
+        "display_name": "Bibliotecario",
+        "role": "Bibliotecario de Conhecimento",
+        "goal": "Organizar outputs no Obsidian ACCESS, atualizar MOCs, padronizar nomes, documentar aprendizados.",
+        "backstory": "Arquivista meticuloso do Ideaverse. Qualquer informacao encontrada em segundos.",
+        "col": 9.0,
+        "row": 6.0,
+        "sprite_char": 3,
+    },
 ]
 
 # Campos que devem ser mantidos sincronizados com o código (não inclui col/row/sprite_char)
@@ -152,10 +192,14 @@ def _sync_agent_configs(db):
 
 
 _AGENT_DISPLAY = {
-    "copywriter": "Copywriter",
-    "vendedor": "Vendedor",
-    "programador": "Programador",
-    "planner": "Planner",
+    "copywriter":    "Copywriter",
+    "vendedor":      "Vendedor",
+    "programador":   "Programador",
+    "planner":       "Planner",
+    "designer":      "Designer",
+    "qa":            "QA",
+    "devops":        "DevOps",
+    "bibliotecario": "Bibliotecario",
 }
 
 
@@ -331,6 +375,22 @@ def chat(req: ChatRequest):
     elif req.npc_id == "planner":
         agent = create_planner()
         task = create_planner_task(agent, req.message)
+    elif req.npc_id == "designer":
+        from .agents import create_designer
+        agent = create_designer()
+        task = create_chat_task(agent, req.message)
+    elif req.npc_id == "qa":
+        from .agents import create_qa
+        agent = create_qa()
+        task = create_chat_task(agent, req.message)
+    elif req.npc_id == "devops":
+        from .agents import create_devops
+        agent = create_devops()
+        task = create_chat_task(agent, req.message)
+    elif req.npc_id == "bibliotecario":
+        from .agents import create_bibliotecario
+        agent = create_bibliotecario()
+        task = create_chat_task(agent, req.message)
     else:
         raise HTTPException(status_code=404, detail=f"NPC sem handler de chat: {req.npc_id}")
 
