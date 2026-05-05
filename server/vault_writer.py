@@ -5,8 +5,10 @@ Usado pelo pipeline — bypassa o HTTP /api/vault/knowledge.
 """
 from __future__ import annotations
 
+import logging
 import os
 import re
+import time
 import unicodedata
 from datetime import date
 from pathlib import Path
@@ -78,7 +80,6 @@ def write_note(
     if full.exists():
         stem   = full.stem
         suffix = full.suffix
-        import time
         ts     = str(int(time.time()))[-6:]
         full   = full.parent / f"{stem}-{ts}{suffix}"
 
@@ -90,7 +91,7 @@ def write_note(
         from server.obsidian_indexer import index_single_file
         try:
             index_single_file(full)
-        except Exception:
-            pass  # Qdrant offline não bloqueia escrita
+        except Exception as exc:
+            logging.getLogger(__name__).warning("vault_writer: indexing skipped — %s", exc)
 
     return full
