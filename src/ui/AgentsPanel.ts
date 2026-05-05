@@ -97,10 +97,10 @@ export class AgentsPanel {
       const card = document.createElement("div");
       card.className = "agent-card";
       card.innerHTML = `
-        <div class="agent-card-avatar">${agent.display_name[0]}</div>
+        <div class="agent-card-avatar">${this.esc(agent.display_name[0])}</div>
         <div class="agent-card-info">
-          <div class="agent-card-name">${agent.display_name}</div>
-          <div class="agent-card-role">${agent.role}</div>
+          <div class="agent-card-name">${this.esc(agent.display_name)}</div>
+          <div class="agent-card-role">${this.esc(agent.role)}</div>
         </div>
       `;
       card.addEventListener("click", () => this.openProfile(agent));
@@ -121,9 +121,9 @@ export class AgentsPanel {
     const agent = this.currentAgent!;
     const el    = document.getElementById("agents-profile-content")!;
     el.innerHTML = `
-      <div class="agent-profile-avatar">${agent.display_name[0]}</div>
-      <div class="agent-profile-name">${agent.display_name}</div>
-      <div class="agent-profile-role">${agent.role}</div>
+      <div class="agent-profile-avatar">${this.esc(agent.display_name[0])}</div>
+      <div class="agent-profile-name">${this.esc(agent.display_name)}</div>
+      <div class="agent-profile-role">${this.esc(agent.role)}</div>
       <div class="agent-crew-section">
         <h4>Definições CrewAI</h4>
         <div class="form-group">
