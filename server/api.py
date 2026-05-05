@@ -530,6 +530,18 @@ async def reindex_agent_knowledge(agent_id: str):
     return {"indexed_count": count}
 
 
+@app.get("/api/librarian/context")
+async def librarian_context(q: str):
+    """
+    Pergunta ao Bibliotecario sobre projetos anteriores via busca semantica.
+    Exemplo: GET /api/librarian/context?q=o+que+aprendemos+no+ultimo+site+estilo+Habbo
+    """
+    from .librarian import context_query
+    loop   = asyncio.get_event_loop()
+    answer = await loop.run_in_executor(None, context_query, q)
+    return {"question": q, "answer": answer}
+
+
 @app.get("/api/planner/tasks")
 def get_planner_tasks():
     return planner_loop.get_tasks()
