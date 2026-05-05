@@ -1,4 +1,5 @@
 import subprocess
+import threading
 import time
 from pathlib import Path
 
@@ -7,13 +8,22 @@ import pyperclip
 from crewai.tools import BaseTool
 from pydantic import BaseModel, Field
 
-try:
-    import pygetwindow as gw
-    _HAS_GW = True
-except ImportError:
-    _HAS_GW = False
+pyautogui.FAILSAFE = False
 
 VIDEOS_DIR = Path(r"C:\Users\v27me\Videos")
+
+_CLAUDE_MD = """\
+# INSTRUÇÕES OBRIGATÓRIAS — LEIA ANTES DE QUALQUER COISA
+
+NUNCA use skills de superpowers (brainstorming, writing-plans, executing-plans,
+subagent-driven-development, verification-before-completion, ou qualquer outra skill).
+
+NUNCA peça confirmação, aprovação ou revisão antes de implementar.
+
+NUNCA entre em modo de planejamento (Plan Mode).
+
+Implemente IMEDIATAMENTE e DIRETAMENTE tudo que for pedido, sem perguntas.
+"""
 
 
 class DevToolInput(BaseModel):
@@ -30,10 +40,9 @@ class DevToolInput(BaseModel):
 class OpenClaudeCliTool(BaseTool):
     name: str = "open_claude_cli"
     description: str = (
-        "Cria pasta em C:/Users/v27me/Videos/{project_slug}, abre Open Interpreter "
-        "que abre um terminal PowerShell, digita 'claude', aguarda 15s, pressiona 1 "
-        "para confiar no projeto e cola o prompt de desenvolvimento. "
-        "Retorna o caminho absoluto da pasta criada."
+        "Cria pasta em C:/Users/v27me/Videos/{project_slug}, abre um terminal PowerShell, "
+        "digita 'claude --dangerously-skip-permissions', aguarda carregar, "
+        "pressiona 1 para confiar no projeto, cola o prompt e pressiona Enter."
     )
     args_schema: type[BaseModel] = DevToolInput
 
@@ -41,60 +50,67 @@ class OpenClaudeCliTool(BaseTool):
         try:
             project_dir = VIDEOS_DIR / project_slug
             project_dir.mkdir(parents=True, exist_ok=True)
-            self._launch(project_dir, prompt)
+            (project_dir / "CLAUDE.md").write_text(_CLAUDE_MD, encoding="utf-8")
+            full_prompt = (
+                "IMPORTANTE: implemente tudo diretamente, sem pedir confirmação "
+                "e sem usar nenhuma skill de superpowers.\n\n" + prompt
+            )
+            self._launch(project_dir, full_prompt)
             return (
                 f"Pasta criada: {project_dir.resolve()}\n"
-                f"Claude CLI iniciado no terminal. O site está sendo construído."
+                f"Claude CLI iniciado no terminal. O site esta sendo construido."
             )
         except Exception as exc:
             return f"error: {exc}"
 
     def _launch(self, project_dir: Path, prompt: str) -> None:
-        from interpreter import interpreter as oi
+        def _focus_pid(pid: int) -> bool:
+            try:
+                import win32gui
+                import win32process
+                import win32con
 
-        oi.auto_run = True
-        oi.llm.model = "ollama/gemma4:e4b"
-        oi.llm.api_base = "http://127.0.0.1:11434"
-        oi.llm.context_window = 8096
+                found = []
 
-        escaped_dir = str(project_dir).replace("\\", "\\\\")
-        prompt_var = repr(prompt)
+                def _cb(hwnd, _):
+                    if win32gui.IsWindowVisible(hwnd):
+                        _, wpid = win32process.GetWindowThreadProcessId(hwnd)
+                        if wpid == pid:
+                            found.append(hwnd)
 
-        script = f"""
-import subprocess, time, pyautogui, pyperclip
-pyautogui.FAILSAFE = False
+                win32gui.EnumWindows(_cb, None)
+                if found:
+                    hwnd = found[-1]
+                    win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
+                    win32gui.SetForegroundWindow(hwnd)
+                    return True
+            except Exception:
+                pass
+            return False
 
-subprocess.Popen(
-    ['powershell.exe', '-NoExit'],
-    cwd=r'{escaped_dir}',
-    creationflags=subprocess.CREATE_NEW_CONSOLE,
-)
-time.sleep(2)
+        def _automate() -> None:
+            proc = subprocess.Popen(
+                ["powershell.exe", "-NoExit"],
+                cwd=str(project_dir),
+                creationflags=subprocess.CREATE_NEW_CONSOLE,
+            )
+            time.sleep(3)
+            _focus_pid(proc.pid)
+            time.sleep(0.5)
 
-try:
-    import pygetwindow as gw
-    wins = gw.getWindowsWithTitle('Windows PowerShell') + gw.getWindowsWithTitle('powershell')
-    if wins:
-        wins[-1].activate()
-        time.sleep(0.5)
-except Exception:
-    pass
+            pyautogui.typewrite("claude --dangerously-skip-permissions", interval=0.05)
+            pyautogui.press("enter")
+            time.sleep(10)
 
-pyautogui.typewrite('claude', interval=0.05)
-pyautogui.press('enter')
-time.sleep(15)
+            _focus_pid(proc.pid)
+            time.sleep(0.3)
+            pyautogui.press("1")
+            time.sleep(2)
 
-pyautogui.typewrite('1', interval=0.05)
-pyautogui.press('enter')
-time.sleep(1)
+            _focus_pid(proc.pid)
+            time.sleep(0.3)
+            pyperclip.copy(prompt)
+            pyautogui.hotkey("ctrl", "v")
+            pyautogui.press("enter")
 
-prompt = {prompt_var}
-pyperclip.copy(prompt)
-pyautogui.hotkey('ctrl', 'v')
-pyautogui.press('enter')
-print('Prompt enviado ao Claude CLI.')
-"""
-
-        oi.chat(
-            f"Execute este script Python exatamente como está, sem modificações:\n\n```python\n{script}\n```"
-        )
+        threading.Thread(target=_automate, daemon=True).start()

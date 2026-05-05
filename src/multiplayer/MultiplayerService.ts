@@ -59,14 +59,6 @@ export class MultiplayerService {
         }
         if (status !== 'SUBSCRIBED') return
         await this.channel!.track({ name, spriteChar })
-
-        // Announce players already present in the room
-        const state = this.channel!.presenceState<PresenceMeta>()
-        for (const [key, presences] of Object.entries(state)) {
-          if (key === playerId) continue
-          const p = presences[0]
-          this.onPlayerJoined?.({ id: key, name: p.name, spriteChar: p.spriteChar })
-        }
         resolve()
       })
     })
@@ -80,6 +72,16 @@ export class MultiplayerService {
       })
       this.pendingPos = null
     }, 50)
+  }
+
+  announceExistingPlayers(): void {
+    if (!this.channel) return
+    const state = this.channel.presenceState<PresenceMeta>()
+    for (const [key, presences] of Object.entries(state)) {
+      if (key === this.myId) continue
+      const p = presences[0]
+      this.onPlayerJoined?.({ id: key, name: p.name, spriteChar: p.spriteChar })
+    }
   }
 
   sendPosition(col: number, row: number, dir: string): void {

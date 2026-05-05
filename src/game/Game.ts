@@ -234,6 +234,8 @@ export class Game {
       mp.onPlayerMoved = (id, col, row, dir) => {
         this.remotePlayers.get(id)?.setTarget(col, row, dir)
       }
+
+      mp.announceExistingPlayers()
     }
 
     this.handleResize();

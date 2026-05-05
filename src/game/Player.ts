@@ -1,4 +1,4 @@
-import { Container, Sprite, Texture, Assets } from "pixi.js";
+import { Container, Sprite, Texture, Assets, Text, TextStyle } from "pixi.js";
 import { ASSETS, PLAYER_SPEED } from "./constants";
 import { clampToRoom, isoToScreen } from "./iso";
 import { CollisionMap } from "./CollisionMap";
@@ -14,6 +14,7 @@ const DIRS: DirKey[] = ["front", "back", "side"];
 export class Player extends Container {
   private sprite!: Sprite;
   private shadow!: Sprite;
+  private nameLabel!: Text;
 
   private idleTextures: Record<DirKey, Texture[]> = { front: [], back: [], side: [] };
   private walkTextures: Record<DirKey, Texture[]> = { front: [], back: [], side: [] };
@@ -69,9 +70,26 @@ export class Player extends Container {
     p.sprite.scale.set(2.64);
     p.addChild(p.sprite);
 
+    p.nameLabel = new Text({
+      text: '',
+      style: new TextStyle({
+        fontSize: 12,
+        fill: 0xffffff,
+        fontFamily: 'monospace',
+        stroke: { color: 0x000000, width: 3 },
+      }),
+    })
+    p.nameLabel.anchor.set(0.5, 1)
+    p.nameLabel.y = -(p.sprite.height + 6)
+    p.addChild(p.nameLabel)
+
     p.bindInput();
     p.syncScreen();
     return p;
+  }
+
+  setName(name: string): void {
+    this.nameLabel.text = name
   }
 
   private bindInput() {
@@ -129,6 +147,7 @@ export class Player extends Container {
     }
 
     this.updateSprite(moving);
+    this.nameLabel.y = -(this.sprite.height + 6);
     this.syncScreen();
   }
 

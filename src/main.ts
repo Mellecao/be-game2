@@ -30,6 +30,8 @@ async function bootstrap() {
   try {
     const game = new Game(app);
     await game.init(container, mp);
+    game.player.setName(identity.name);
+    window.addEventListener('beforeunload', () => mp.disconnect());
 
     const chat = new ChatPanel();
 
