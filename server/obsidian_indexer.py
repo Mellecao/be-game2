@@ -85,14 +85,17 @@ def _iter_chunks_for_file(file_path: Path) -> Iterator[dict]:
     if isinstance(tags, str):
         tags = [tags]
     up = meta.get("up", "")
+    chunk_idx = 0
     for heading, body in _split_sections(content):
         for chunk in _chunk_text(body):
             chunk = chunk.strip()
             if len(chunk) < 30:
                 continue
             section_label = f"{title} › {heading}" if heading else title
+            chunk_id = str(uuid.uuid5(uuid.NAMESPACE_URL, f"{rel}#{heading}#{chunk_idx}"))
+            chunk_idx += 1
             yield {
-                "id":      str(uuid.uuid4()),
+                "id":      chunk_id,
                 "text":    f"{section_label}\n\n{chunk}",
                 "title":   title,
                 "section": heading,
@@ -134,8 +137,10 @@ def delete_file_chunks(file_path: str | Path) -> None:
                 filter=Filter(must=[FieldCondition(key="path", match=MatchValue(value=rel))])
             ),
         )
-    except Exception:
-        pass  # collection may not exist yet
+    except Exception as e:
+        err_str = str(e).lower()
+        if "not found" not in err_str and "does not exist" not in err_str:
+            raise
 
 
 def get_agent_files(agent_id: str) -> list[dict]:
