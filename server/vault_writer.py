@@ -92,6 +92,6 @@ def write_note(
         try:
             index_single_file(full)
         except Exception as exc:
-            logging.getLogger(__name__).warning("vault_writer: indexing skipped — %s", exc)
+            logging.getLogger(__name__).debug("vault_writer: indexing skipped — %s", exc)
 
     return full

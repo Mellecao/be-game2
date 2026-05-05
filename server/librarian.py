@@ -45,7 +45,7 @@ def after_copy(slug: str, copy_path: str, moc_path: str, index: bool = True) -> 
             from server.obsidian_indexer import index_single_file
             index_single_file(full_moc)
         except Exception as exc:
-            logging.getLogger(__name__).warning("bibliotecario: indexing MOC skipped — %s", exc)
+            logging.getLogger(__name__).debug("bibliotecario: indexing MOC skipped — %s", exc)
 
 
 def after_dev(slug: str, project_dir: str, moc_path: str, index: bool = True) -> None:
@@ -98,7 +98,7 @@ def after_dev(slug: str, project_dir: str, moc_path: str, index: bool = True) ->
             if full_moc.exists():
                 index_single_file(full_moc)
         except Exception as exc:
-            logging.getLogger(__name__).warning("bibliotecario: indexing skipped — %s", exc)
+            logging.getLogger(__name__).debug("bibliotecario: indexing skipped — %s", exc)
 
 
 def after_deploy(
@@ -138,7 +138,7 @@ def after_deploy(
             if full_moc.exists():
                 index_single_file(full_moc)
         except Exception as exc:
-            logging.getLogger(__name__).warning("bibliotecario: indexing skipped — %s", exc)
+            logging.getLogger(__name__).debug("bibliotecario: indexing skipped — %s", exc)
 
 
 def context_query(question: str) -> str:

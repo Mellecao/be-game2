@@ -115,7 +115,7 @@ def _iter_chunks(vault: Path) -> Iterator[dict]:
 def index_single_file(file_path: str | Path) -> int:
     """Index a single .md file into Qdrant. Returns number of chunks upserted."""
     path   = Path(file_path)
-    client = QdrantClient(url=QDRANT_URL)
+    client = QdrantClient(url=QDRANT_URL, check_compatibility=False)
     delete_file_chunks(path)
     chunks = list(_iter_chunks_for_file(path))
     if not chunks:
@@ -129,7 +129,7 @@ def delete_file_chunks(file_path: str | Path) -> None:
     from qdrant_client.models import FilterSelector, Filter, FieldCondition, MatchValue
     path = Path(file_path)
     rel  = path.relative_to(VAULT_PATH).as_posix()
-    client = QdrantClient(url=QDRANT_URL)
+    client = QdrantClient(url=QDRANT_URL, check_compatibility=False)
     try:
         client.delete(
             collection_name=COLLECTION,
@@ -211,7 +211,7 @@ def _upsert_batch(client: QdrantClient, payloads: list[dict]) -> None:
 
 def run(vault_path: Path | None = None, batch_size: int = 64) -> int:
     path   = vault_path or VAULT_PATH
-    client = QdrantClient(url=QDRANT_URL)
+    client = QdrantClient(url=QDRANT_URL, check_compatibility=False)
 
     print(f"[indexer] vault: {path}")
     print(f"[indexer] qdrant: {QDRANT_URL}  coleção: {COLLECTION}")
