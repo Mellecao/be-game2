@@ -576,7 +576,7 @@ html, body {
 
 #agents-training-content { flex: 1; overflow-y: auto; padding: 12px; }
 
-/* ACE grid */
+/* ACE grid (legacy, kept for safety) */
 .ace-grid { display: flex; flex-direction: column; gap: 6px; }
 .ace-card-wrapper { border-radius: 8px; overflow: hidden; border: 1px solid #333; }
 .ace-card {
@@ -591,6 +591,54 @@ html, body {
 
 .ace-form-container { background: #0f0f1d; border-top: 1px solid #2a2a3a; }
 .ace-form { padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+
+/* ACE list navigation */
+.ace-list { display: flex; flex-direction: column; gap: 6px; }
+.ace-list-item {
+  display: flex; align-items: center; gap: 14px;
+  padding: 14px 16px; background: #1a1a2e;
+  border: 1px solid #2a2a3a; border-radius: 10px;
+  cursor: pointer; transition: background 0.12s, border-color 0.12s;
+}
+.ace-list-item:hover { background: #22223e; border-color: #555; }
+.ace-list-icon  { font-size: 24px; flex-shrink: 0; }
+.ace-list-text  { flex: 1; min-width: 0; }
+.ace-list-label { font-weight: bold; font-size: 14px; }
+.ace-list-desc  { font-size: 11px; color: #555; margin-top: 3px; }
+.ace-list-arrow { color: #444; font-size: 20px; flex-shrink: 0; }
+
+/* ACE full-panel form */
+.ace-full-header {
+  display: flex; flex-direction: column; gap: 4px;
+  padding-bottom: 12px; border-bottom: 1px solid #2a2a3a; margin-bottom: 14px;
+}
+.ace-full-back {
+  background: none; border: none; color: #666; cursor: pointer;
+  font-size: 13px; padding: 2px 0; align-self: flex-start;
+  font-family: inherit; transition: color 0.12s;
+}
+.ace-full-back:hover { color: #eee; }
+.ace-full-header-text { display: flex; align-items: center; gap: 10px; margin-top: 6px; }
+.ace-full-icon  { font-size: 26px; }
+.ace-full-title { font-size: 17px; font-weight: bold; }
+.ace-full-sub   { font-size: 11px; color: #444; padding-left: 2px; }
+
+.ace-full-form { display: flex; flex-direction: column; gap: 10px; }
+
+/* Big textarea */
+.ace-big-textarea-group { display: flex; flex-direction: column; gap: 4px; }
+.ace-big-textarea {
+  min-height: clamp(200px, calc(100vh - 480px), 420px);
+  resize: vertical;
+  line-height: 1.6;
+  font-size: 12px;
+}
+
+/* Field hint */
+.field-hint { font-size: 10px; color: #3e3e52; margin-top: 2px; line-height: 1.3; }
+
+/* Full-form submit button variant */
+.ace-submit-full { padding: 12px; font-size: 14px; margin-top: 4px; }
 
 /* Form shared */
 .form-group { display: flex; flex-direction: column; gap: 4px; }
