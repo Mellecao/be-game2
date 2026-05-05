@@ -8,9 +8,16 @@ import { AgentConfigModal } from "./ui/AgentConfigModal";
 import { ASSETS } from "./game/constants";
 import { NicknameModal } from "./ui/NicknameModal";
 import { MultiplayerService } from "./multiplayer/MultiplayerService";
+import { AgentToast, connectEventStream } from "./ui/AgentToast";
+import { TasksPanel } from "./ui/TasksPanel";
+import { AgentsPanel } from "./ui/AgentsPanel";
 
 async function bootstrap() {
   const identity = await NicknameModal.getOrPrompt();
+  const toast = new AgentToast();
+  const tasksPanel = new TasksPanel();
+  new AgentsPanel();
+  connectEventStream(toast, tasksPanel);
 
   const app = new Application();
   await app.init({
