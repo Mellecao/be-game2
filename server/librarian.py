@@ -106,14 +106,18 @@ def after_deploy(
     github_url: str,
     moc_path: str,
     effort_path: str,
+    netlify_url: str = "",
     index: bool = True,
 ) -> None:
-    """Intervencao pos-deploy: atualiza MOC com URL, arquiva Effort."""
+    """Intervencao pos-deploy: atualiza MOC com URLs (GitHub + Netlify), arquiva Effort."""
     full_moc = VAULT_PATH / moc_path
     if full_moc.exists():
         text = full_moc.read_text(encoding="utf-8")
         if "## Deploy" in text and github_url not in text:
-            text = text.replace("## Deploy\n", f"## Deploy\n- URL: {github_url}\n")
+            url_lines = f"- GitHub: {github_url}\n"
+            if netlify_url:
+                url_lines += f"- Netlify: {netlify_url}\n"
+            text = text.replace("## Deploy\n", f"## Deploy\n{url_lines}")
             full_moc.write_text(text, encoding="utf-8")
 
     full_effort = VAULT_PATH / effort_path

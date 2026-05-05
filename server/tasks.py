@@ -157,24 +157,54 @@ def create_devops_task(agent: Agent, context: dict) -> Task:
             f"Voce e o DevOps. O QA aprovou o projeto '{slug}'.\n\n"
             f"Use a ferramenta github_push passando:\n"
             f"  project_slug: '{slug}'\n\n"
-            f"A ferramenta ira: git init → add → commit → criar repo no GitHub → push.\n\n"
-            f"Retorne APENAS a URL do repositorio GitHub retornada pela ferramenta, "
-            f"no formato: https://github.com/username/repo-name\n"
-            f"Nao adicione texto antes ou depois da URL."
+            f"A ferramenta ira: git init → add → commit → criar repo no GitHub → push → deploy no Netlify.\n\n"
+            f"Retorne EXATAMENTE o texto retornado pela ferramenta, que sera no formato:\n"
+            f"github: https://github.com/username/{slug}\n"
+            f"netlify: https://{slug}.netlify.app\n\n"
+            f"Nao adicione texto antes ou depois."
         ),
-        expected_output="URL GitHub no formato https://github.com/username/nome-do-repo",
+        expected_output=(
+            f"Duas linhas: 'github: <URL>' e 'netlify: <URL>'"
+        ),
+        agent=agent,
+    )
+
+
+def create_dev_revision_task(agent: Agent, context: dict) -> Task:
+    return Task(
+        description=(
+            f"O QA REPROVOU o projeto '{context['slug']}'. Voce precisa corrigir os problemas encontrados.\n\n"
+            f"Relatorio do QA:\n{context['qa_feedback']}\n\n"
+            f"A pasta do projeto ja existe em: {context['project_dir']}\n\n"
+            f"Siga estes passos:\n"
+            f"1. Use o mesmo project_slug '{context['slug']}' (a pasta ja existe com os arquivos).\n"
+            f"2. Monte um prompt de REVISAO em ingles para o Claude CLI. O prompt deve:\n"
+            f"   - Informar que e uma revisao de projeto existente\n"
+            f"   - Listar cada problema identificado pelo QA e pedir correcao\n"
+            f"   - Solicitar que Claude leia os arquivos atuais antes de editar\n"
+            f"   - Garantir que index.html tenha <!DOCTYPE html>, meta charset, meta viewport e <title>\n"
+            f"   - Garantir presenca de CDN links para Three.js e/ou GSAP\n"
+            f"   - Incluir ao final: criar arquivo .claude-done com conteudo 'done'\n"
+            f"3. Use a ferramenta open_claude_cli com o project_slug '{context['slug']}' e o prompt de revisao.\n"
+            f"4. Confirme em portugues que a revisao foi iniciada e quais problemas serao corrigidos."
+        ),
+        expected_output=(
+            "Confirmacao em portugues de que o Claude CLI foi iniciado para revisao, "
+            "com lista dos problemas que serao corrigidos."
+        ),
         agent=agent,
     )
 
 
 def create_planner_close_task(agent: Agent, context: dict) -> Task:
+    netlify_line = f"\nNetlify: {context['netlify_url']}" if context.get("netlify_url") else ""
     return Task(
         description=(
             f"Voce e o Planner. O projeto '{context['card_name']}' foi concluido!\n\n"
-            f"GitHub: {context['github_url']}\n\n"
-            f"Confirme a entrega em 2-3 frases: o que foi entregue, onde esta e "
-            f"que o card no Trello foi movido para Concluido."
+            f"GitHub: {context['github_url']}{netlify_line}\n\n"
+            f"Confirme a entrega em 2-3 frases: o que foi entregue, onde esta "
+            f"(GitHub e Netlify) e que o card no Trello foi movido para Concluido."
         ),
-        expected_output="Confirmacao da entrega em 2-3 frases com a URL do GitHub.",
+        expected_output="Confirmacao da entrega em 2-3 frases com as URLs do GitHub e Netlify.",
         agent=agent,
     )

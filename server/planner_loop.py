@@ -19,7 +19,7 @@ DELAY_SECONDS = 30
 class PlannerTask:
     id: str
     card_name: str
-    status: str      # waiting|delegating|planning|copywriting|designing|developing|reviewing|deploying|closing|done|error|cancelled
+    status: str      # waiting|delegating|planning|copywriting|designing|developing|reviewing|revision|deploying|closing|done|error|cancelled
     log: str
     created_at: float
     start_at: float
@@ -247,7 +247,7 @@ def _run_pipeline(task: PlannerTask, card_name: str, card_desc: str) -> None:
     from .tasks import (
         create_planner_moc_task, create_copywriter_pipeline_task,
         create_designer_task, create_dev_task,
-        create_qa_task, create_devops_task, create_planner_close_task,
+        create_qa_task, create_dev_revision_task, create_devops_task, create_planner_close_task,
     )
     from . import vault_writer
     from . import trello_tool
@@ -322,7 +322,7 @@ def _run_pipeline(task: PlannerTask, card_name: str, card_desc: str) -> None:
 
         librarian.after_dev(slug, project_dir, moc_path)
 
-        # ── 5. QA ────────────────────────────────────────────────────────────
+        # ── 5. QA (primeira revisão) ─────────────────────────────────────────
         if not _set(5, "reviewing", "QA revisando codigo..."):
             return
 
@@ -331,46 +331,79 @@ def _run_pipeline(task: PlannerTask, card_name: str, card_desc: str) -> None:
         qa_result    = str(Crew(agents=[qa_agent], tasks=[create_qa_task(qa_agent, {"slug": slug, "project_dir": project_dir, "file_summary": file_summary})], verbose=False).kickoff())
 
         if "STATUS: REPROVADO" in qa_result:
-            with _tasks_lock:
-                task.status = "error"
-                task.log    = f"QA reprovado: {qa_result[:300]}"
-            event_bus.emit("qa_failed", f"QA reprovado para '{card_name}'")
-            return
+            # ── Envia de volta ao Dev para corrigir ──────────────────────────
+            if not _set(5, "revision", f"QA reprovou — Dev corrigindo os problemas..."):
+                return
+
+            print(f"[planner:{task.id[:8]}] QA REPROVOU — iniciando revisao com Dev")
+            event_bus.emit("qa_failed", f"⚠️ QA reprovou '{card_name}' — Dev revisando...")
+
+            dev_rev      = create_developer()
+            Crew(agents=[dev_rev], tasks=[create_dev_revision_task(dev_rev, {
+                "slug":         slug,
+                "project_dir":  project_dir,
+                "qa_feedback":  qa_result,
+            })], verbose=False).kickoff()
+
+            # ── QA segunda passagem ───────────────────────────────────────────
+            if not _set(5, "reviewing", "QA revisando codigo corrigido..."):
+                return
+
+            file_summary2 = _read_project_files(project_dir)
+            qa_agent2     = create_qa()
+            qa_result2    = str(Crew(agents=[qa_agent2], tasks=[create_qa_task(qa_agent2, {"slug": slug, "project_dir": project_dir, "file_summary": file_summary2})], verbose=False).kickoff())
+
+            if "STATUS: REPROVADO" in qa_result2:
+                with _tasks_lock:
+                    task.status = "error"
+                    task.log    = f"QA reprovou apos revisao: {qa_result2[:300]}"
+                print(f"[planner:{task.id[:8]}] QA REPROVOU apos revisao — abortando pipeline")
+                event_bus.emit("error", f"❌ QA reprovou '{card_name}' após revisão")
+                return
+
+            print(f"[planner:{task.id[:8]}] QA APROVADO na segunda passagem apos revisao")
 
         # ── 6. DEPLOY ────────────────────────────────────────────────────────
-        if not _set(6, "deploying", "DevOps fazendo push para GitHub..."):
+        if not _set(6, "deploying", "DevOps fazendo push para GitHub + Netlify..."):
             return
 
         devops_agent = create_devops()
         devops_raw   = str(Crew(agents=[devops_agent], tasks=[create_devops_task(devops_agent, {"slug": slug})], verbose=False).kickoff())
-        url_match    = _re.search(r"https://github\.com/[\w.-]+/[\w.-]+", devops_raw)
-        github_url   = url_match.group(0) if url_match else devops_raw.strip()
+
+        gh_match    = _re.search(r"https://github\.com/[\w.-]+/[\w.-]+", devops_raw)
+        nl_match    = _re.search(r"https://[\w-]+\.netlify\.app", devops_raw)
+        github_url  = gh_match.group(0) if gh_match else devops_raw.strip()
+        netlify_url = nl_match.group(0) if nl_match else ""
 
         # ── 7. FECHAMENTO ────────────────────────────────────────────────────
         if not _set(7, "closing", "Planner atualizando Trello e arquivando vault..."):
             return
 
+        deploy_summary = github_url
+        if netlify_url:
+            deploy_summary += f"\nNetlify: {netlify_url}"
+
         done_list_id = os.environ.get("TRELLO_DONE_LIST_ID", "")
         if done_list_id:
             try:
-                trello_tool.update_card_description(task.id, f"{card_desc}\n\n---\n Entregue: {github_url}")
+                trello_tool.update_card_description(task.id, f"{card_desc}\n\n---\n Entregue:\n- GitHub: {github_url}{chr(10) + '- Netlify: ' + netlify_url if netlify_url else ''}")
                 trello_tool.move_card_to_list(task.id, done_list_id)
             except Exception as e:
                 print(f"[planner:{task.id[:8]}] AVISO Trello: {e}")
 
-        librarian.after_deploy(slug, github_url, moc_path, effort_path)
+        librarian.after_deploy(slug, github_url, moc_path, effort_path, netlify_url=netlify_url)
 
         planner2 = create_planner()
-        Crew(agents=[planner2], tasks=[create_planner_close_task(planner2, {"card_name": card_name, "github_url": github_url})], verbose=False).kickoff()
+        Crew(agents=[planner2], tasks=[create_planner_close_task(planner2, {"card_name": card_name, "github_url": github_url, "netlify_url": netlify_url})], verbose=False).kickoff()
 
         # ── DONE ─────────────────────────────────────────────────────────────
         with _tasks_lock:
             task.status = "done"
             task.step   = 7
-            task.log    = f"Pipeline concluido — {github_url}"
+            task.log    = f"Pipeline concluido — {deploy_summary}"
 
-        print(f"[planner:{task.id[:8]}] PIPELINE CONCLUIDO: \"{card_name}\" → {github_url}")
-        event_bus.emit("pipeline_done", f"'{card_name}' entregue: {github_url}")
+        print(f"[planner:{task.id[:8]}] PIPELINE CONCLUIDO: \"{card_name}\" → {deploy_summary}")
+        event_bus.emit("pipeline_done", f"'{card_name}' entregue: {deploy_summary}")
 
     except Exception as e:
         with _tasks_lock:

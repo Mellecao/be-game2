@@ -23,9 +23,43 @@ def test_missing_project_folder_returns_error(monkeypatch):
     assert "nao encontrada" in result.lower() or "not found" in result.lower()
 
 
-def test_successful_push_returns_url(tmp_path, monkeypatch):
+def test_successful_push_returns_github_and_netlify_urls(tmp_path, monkeypatch):
     monkeypatch.setenv("GITHUB_USERNAME", "testuser")
     monkeypatch.setenv("GITHUB_TOKEN", "ghp_fake")
+    monkeypatch.setenv("NETLIFY_ACCESS_TOKEN", "fake_nl_token")
+
+    import server.github_tool as gt
+    monkeypatch.setattr(gt, "VIDEOS_DIR", tmp_path)
+    proj = tmp_path / "meu-projeto"
+    proj.mkdir()
+    (proj / "index.html").write_text("<html></html>")
+
+    mock_completed = MagicMock()
+    mock_completed.returncode = 0
+    mock_completed.stderr = ""
+    mock_completed.stdout = ""
+
+    mock_resp = MagicMock()
+    mock_resp.status_code = 201
+    mock_resp.json.return_value = {
+        "id": "site-abc123",
+        "ssl_url": "https://meu-projeto.netlify.app",
+    }
+
+    with patch("subprocess.run", return_value=mock_completed), \
+         patch("requests.post", return_value=mock_resp):
+        from server.github_tool import GitHubPushTool
+        tool = GitHubPushTool()
+        result = tool._run(project_slug="meu-projeto")
+
+    assert "https://github.com/testuser/meu-projeto" in result
+    assert "https://meu-projeto.netlify.app" in result
+
+
+def test_successful_push_without_netlify_token(tmp_path, monkeypatch):
+    monkeypatch.setenv("GITHUB_USERNAME", "testuser")
+    monkeypatch.setenv("GITHUB_TOKEN", "ghp_fake")
+    monkeypatch.delenv("NETLIFY_ACCESS_TOKEN", raising=False)
 
     import server.github_tool as gt
     monkeypatch.setattr(gt, "VIDEOS_DIR", tmp_path)
@@ -46,7 +80,8 @@ def test_successful_push_returns_url(tmp_path, monkeypatch):
         tool = GitHubPushTool()
         result = tool._run(project_slug="meu-projeto")
 
-    assert result == "https://github.com/testuser/meu-projeto"
+    assert "https://github.com/testuser/meu-projeto" in result
+    assert "NETLIFY_ACCESS_TOKEN" in result
 
 
 def test_git_failure_returns_error(tmp_path, monkeypatch):
