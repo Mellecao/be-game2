@@ -18,11 +18,13 @@ Add a floating "Agentes" button to the BE-Game UI that opens a right-side drawer
 Frontend (TypeScript)          Backend (FastAPI)              Vault (Obsidian)
 ─────────────────────          ─────────────────              ────────────────
 src/ui/AgentsPanel.ts          GET  /api/agents               Atlas/Notes/Agentes/[Name]/*.md
-                               GET  /api/vault/knowledge/{id} Calendar/*.md
-                               POST /api/vault/knowledge      Efforts/On|Ongoing|Simmering/*.md
-                               DELETE /api/vault/knowledge    Atlas/Utilities/Images/*.png|jpg
-                               POST /api/vault/image
-                               POST /api/vault/reindex/{id}
+                               GET  /api/vault/knowledge/{id} Atlas/Notes/Cards/[Name]/*.md
+                               POST /api/vault/knowledge      Atlas/Notes/Sources/[Name]/*.md
+                               DELETE /api/vault/knowledge    Atlas/Utilities/[Name]/*.md
+                               POST /api/vault/image          Atlas/Maps/*.md
+                               POST /api/vault/reindex/{id}   Calendar/*.md
+                                                              Efforts/On|Ongoing|Simmering/*.md
+                                                              Atlas/Utilities/Images/*
 ```
 
 **Agent ownership in vault:** frontmatter field `agent: {agent_id}` (e.g. `agent: copywriter`) on every file created via the training panel. Used to filter knowledge per agent.
@@ -65,19 +67,24 @@ src/ui/AgentsPanel.ts          GET  /api/agents               Atlas/Notes/Agente
 - Three tabs: **Quick-Add ACE** | **Novo Documento** | **Conhecimento Atual**
 
 #### Tab: Quick-Add ACE
-Three clickable cards (Atlas, Calendar, Efforts). Clicking a card expands an inline form:
+Six clickable cards, one per categoria. Clicking expands um formulário inline:
 
-| Card | Fields | Destination path |
-|------|--------|-----------------|
-| Atlas | título, conteúdo (markdown), tags | `Atlas/Notes/Agentes/[Name]/[título].md` |
-| Calendar | data (default hoje), título, conteúdo | `Calendar/[YYYY-MM-DD]-[título].md` |
-| Efforts | título, status (On/Ongoing/Simmering), rank (1–10), conteúdo | `Efforts/[status]/[título] (E).md` or `(OE).md` |
+| Card | Descrição | Campos | Destination path |
+|------|-----------|--------|-----------------|
+| **Atlas** | Conhecimento permanente e MOCs | título, conteúdo (markdown), tags, is_moc (toggle) | `Atlas/Notes/Agentes/[Name]/[título].md` (nota) ou `Atlas/Maps/[título] MOC.md` (moc) |
+| **Calendar** | Registros temporais | data (default hoje), título, conteúdo | `Calendar/[YYYY-MM-DD]-[título].md` |
+| **Cards** | Notas atômicas e curtas | título (max 80 chars), conteúdo (max ~300 chars), tags | `Atlas/Notes/Cards/[AgentName]/[título].md` |
+| **Efforts** | Projetos ativos | título, status (On/Ongoing/Simmering), rank (1–10), conteúdo | `Efforts/[status]/[título] (E).md` ou `(OE).md` |
+| **Resources** | Biblioteca de consulta | título, tipo (design/manual/referência), conteúdo, upload de imagem | `Atlas/Utilities/[AgentName]/[título].md` |
+| **Sources** | O que vem de fora | título, origem (URL ou autor), tipo (artigo/vídeo/livro/dado), conteúdo | `Atlas/Notes/Sources/[AgentName]/[título].md` |
 
 Submit → `POST /api/vault/knowledge` → file created → re-indexed → success toast.
 
+Pastas novas criadas automaticamente se não existirem: `Atlas/Notes/Cards/`, `Atlas/Utilities/[AgentName]/`, `Atlas/Notes/Sources/[AgentName]/`.
+
 #### Tab: Novo Documento
 - Título (text input)
-- Pasta destino (dropdown): Atlas/Notes/Agentes, Calendar, Efforts/On, Efforts/Ongoing, Efforts/Simmering
+- Pasta destino (dropdown): Atlas/Notes/Agentes, Atlas/Notes/Cards, Atlas/Notes/Sources, Atlas/Utilities, Calendar, Efforts/On, Efforts/Ongoing, Efforts/Simmering
 - Tags (chip input, comma-separated)
 - Conteúdo (textarea, markdown)
 - Upload de imagem: drag-and-drop zone + file picker button
@@ -118,12 +125,14 @@ Scans vault for `.md` files with `agent: {agent_id}` in frontmatter.
   "agent_id": "copywriter",
   "title": "Tom e Voz Atualizado",
   "content": "Conteúdo markdown...",
-  "ace_type": "atlas",
-  "ace_subtype": "notes",
+  "ace_type": "atlas|calendar|cards|efforts|resources|sources",
+  "ace_subtype": "notes|moc|daily|on|ongoing|simmering|design|manual|referencia|artigo|video|livro|dado",
   "tags": ["copywriter", "tom-e-voz"],
   "rank": null,
   "effort_status": null,
   "date": null,
+  "source_url": null,
+  "source_author": null,
   "image_base64": null,
   "image_filename": null
 }
@@ -193,13 +202,17 @@ created: 2026-05-05
 
 ## Path Conventions
 
-| ACE Type | Subtype | Path Pattern |
-|----------|---------|-------------|
+| Categoria | Subtype | Path Pattern |
+|-----------|---------|-------------|
 | Atlas | notes | `Atlas/Notes/Agentes/[AgentName]/[título].md` |
+| Atlas | moc | `Atlas/Maps/[título] MOC.md` |
 | Calendar | daily | `Calendar/[YYYY-MM-DD]-[título].md` |
+| Cards | — | `Atlas/Notes/Cards/[AgentName]/[título].md` |
 | Efforts | On | `Efforts/On/[título] (E).md` |
 | Efforts | Ongoing | `Efforts/Ongoing/[título] (OE).md` |
 | Efforts | Simmering | `Efforts/Simmering/[título] (E).md` |
+| Resources | — | `Atlas/Utilities/[AgentName]/[título].md` |
+| Sources | — | `Atlas/Notes/Sources/[AgentName]/[título].md` |
 | Novo Documento | (user choice) | `[chosen_folder]/[título].md` |
 | Images | — | `Atlas/Utilities/Images/[filename]` |
 
