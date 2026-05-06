@@ -1,3 +1,5 @@
+import os
+
 from crewai import Agent, LLM
 from .dev_tool import OpenClaudeCliTool
 from .github_tool import get_github_tool
@@ -5,8 +7,9 @@ from .trello_tool import TrelloListCardsTool
 from .vault_tool import get_vault_tool
 
 llm = LLM(
-    model="ollama/gemma4",
-    base_url="http://localhost:11434",
+    model="openrouter/deepseek/deepseek-v4-flash",
+    base_url="https://openrouter.ai/api/v1",
+    api_key=os.environ.get("OPENROUTER_API_KEY", ""),
 )
 
 
