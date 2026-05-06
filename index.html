@@ -20,6 +20,63 @@
         <button type="submit" id="chat-send">Enviar</button>
       </form>
     </div>
+    <div id="agent-toasts"></div>
+
+    <!-- Tasks Panel -->
+    <button id="tasks-fab">
+      <span>Tasks</span>
+      <span id="tasks-badge" style="display:none">0</span>
+    </button>
+    <div id="tasks-panel">
+      <div id="tasks-panel-header">
+        <button id="tasks-back" style="display:none">← Voltar</button>
+        <span>Tasks do Planner</span>
+        <button id="tasks-close">×</button>
+      </div>
+      <div id="tasks-list"></div>
+    </div>
+
+    <!-- Agents FAB -->
+    <button id="agents-fab">
+      <span>👥</span>
+      <span>Agentes</span>
+    </button>
+
+    <!-- Agents Panel (right-side drawer) -->
+    <div id="agents-panel">
+      <!-- View 1: Agent List -->
+      <div id="agents-view-list" class="agents-view">
+        <div class="agents-panel-header">
+          <span>Agentes</span>
+          <button id="agents-close">×</button>
+        </div>
+        <div id="agents-list"></div>
+      </div>
+
+      <!-- View 2: Agent Profile -->
+      <div id="agents-view-profile" class="agents-view" style="display:none">
+        <div class="agents-panel-header">
+          <button id="agents-back-profile" class="agents-back">← Voltar</button>
+          <span id="agents-profile-name"></span>
+        </div>
+        <div id="agents-profile-content"></div>
+      </div>
+
+      <!-- View 3: Training Panel -->
+      <div id="agents-view-training" class="agents-view" style="display:none">
+        <div class="agents-panel-header">
+          <button id="agents-back-training" class="agents-back">← Voltar</button>
+          <span id="agents-training-title"></span>
+        </div>
+        <div class="agents-tabs-bar">
+          <button class="agents-tab active" data-tab="quick">Quick-Add</button>
+          <button class="agents-tab" data-tab="novo">Novo Doc</button>
+          <button class="agents-tab" data-tab="knowledge">Conhecimento</button>
+        </div>
+        <div id="agents-training-content"></div>
+      </div>
+    </div>
+
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

@@ -64,29 +64,31 @@ class OpenClaudeCliTool(BaseTool):
                 "com conteúdo \"done\" usando a ferramenta Write."
             )
             done_event = threading.Event()
-            self._launch(project_dir, full_prompt, done_event)
-            print("[dev_tool] aguardando Claude terminar...")
+            print(f"[dev_tool] iniciando job para '{project_slug}' em {project_dir}")
+            self._launch(project_dir, project_slug, full_prompt, done_event)
+            print(f"[dev_tool] aguardando Claude terminar para '{project_slug}'...")
             done_event.wait()
             return (
                 f"Projeto '{project_slug}' concluido!\n"
                 f"Pasta: {project_dir.resolve()}"
             )
         except Exception as exc:
+            print(f"[dev_tool] EXCECAO em _run para '{project_slug}': {exc}")
             return f"error: {exc}"
 
-    def _launch(self, project_dir: Path, prompt: str, done_event: threading.Event) -> None:
-        def _focus_pid(pid: int) -> bool:
+    def _launch(self, project_dir: Path, project_slug: str, prompt: str, done_event: threading.Event) -> None:
+        proc_ref: list = [None]
+        win_title = f"be-dev-{project_slug}"
+
+        def _find_and_focus(title: str) -> bool:
             try:
                 import win32gui
-                import win32process
                 import win32con
-
                 found = []
 
                 def _cb(hwnd, _):
                     if win32gui.IsWindowVisible(hwnd):
-                        _, wpid = win32process.GetWindowThreadProcessId(hwnd)
-                        if wpid == pid:
+                        if title in win32gui.GetWindowText(hwnd):
                             found.append(hwnd)
 
                 win32gui.EnumWindows(_cb, None)
@@ -94,14 +96,13 @@ class OpenClaudeCliTool(BaseTool):
                     hwnd = found[-1]
                     win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
                     win32gui.SetForegroundWindow(hwnd)
+                    print(f"[dev_tool] foco definido: hwnd={hwnd}")
                     return True
-            except Exception:
-                pass
+            except Exception as e:
+                print(f"[dev_tool] _find_and_focus erro: {e}")
             return False
 
-        proc_ref: list = [None]
-
-        def _watch_sentinel(done_event: threading.Event) -> None:
+        def _watch_sentinel() -> None:
             sentinel = project_dir / ".claude-done"
             deadline = time.monotonic() + 5400  # 90 min max
             while time.monotonic() < deadline:
@@ -110,46 +111,67 @@ class OpenClaudeCliTool(BaseTool):
                         sentinel.unlink()
                     except Exception:
                         pass
-                    print(f"[dev_tool] Claude terminou — sentinel detectado em {project_dir}")
+                    print(f"[dev_tool] SENTINEL detectado — '{project_slug}' concluido!")
                     done_event.set()
-                    time.sleep(60)
+                    time.sleep(15)
                     proc = proc_ref[0]
                     if proc:
                         try:
                             proc.terminate()
-                            print("[dev_tool] terminal fechado")
+                            print(f"[dev_tool] terminal de '{project_slug}' encerrado")
                         except Exception:
                             pass
                     return
                 time.sleep(2)
-            print("[dev_tool] timeout — sentinel nao detectado em 30min")
+            print(f"[dev_tool] TIMEOUT (90min) para '{project_slug}' — sentinel nao detectado")
             done_event.set()
 
         def _automate() -> None:
+            print(f"[dev_tool] abrindo PowerShell com titulo '{win_title}'...")
             proc = subprocess.Popen(
-                ["powershell.exe", "-NoExit"],
-                cwd=str(project_dir),
+                [
+                    "powershell.exe", "-NoExit", "-Command",
+                    f"$host.ui.rawui.windowtitle = '{win_title}'; "
+                    f"Set-Location '{project_dir}'"
+                ],
                 creationflags=subprocess.CREATE_NEW_CONSOLE,
             )
             proc_ref[0] = proc
-            time.sleep(3)
-            _focus_pid(proc.pid)
-            time.sleep(0.5)
+            print(f"[dev_tool] processo PID={proc.pid} — aguardando janela aparecer...")
 
-            pyautogui.typewrite("claude --dangerously-skip-permissions", interval=0.05)
+            # Aguarda a janela com o titulo unico aparecer (até 15s)
+            hwnd_found = False
+            for attempt in range(30):
+                time.sleep(0.5)
+                if _find_and_focus(win_title):
+                    print(f"[dev_tool] janela encontrada na tentativa {attempt + 1}")
+                    hwnd_found = True
+                    break
+
+            if not hwnd_found:
+                print(f"[dev_tool] AVISO: janela nao encontrada pelo titulo — continuando mesmo assim")
+
+            time.sleep(1.0)
+            print(f"[dev_tool] digitando 'claude --dangerously-skip-permissions'...")
+            pyautogui.typewrite("claude --dangerously-skip-permissions", interval=0.07)
             pyautogui.press("enter")
-            time.sleep(10)
 
-            _focus_pid(proc.pid)
-            time.sleep(0.3)
+            print(f"[dev_tool] aguardando Claude CLI inicializar (15s)...")
+            time.sleep(15)
+
+            _find_and_focus(win_title)
+            time.sleep(0.6)
+            print(f"[dev_tool] pressionando '1' (confiar no diretorio)...")
             pyautogui.press("1")
-            time.sleep(2)
+            time.sleep(3)
 
-            _focus_pid(proc.pid)
-            time.sleep(0.3)
+            _find_and_focus(win_title)
+            time.sleep(0.6)
+            print(f"[dev_tool] colando prompt ({len(prompt)} chars)...")
             pyperclip.copy(prompt)
             pyautogui.hotkey("ctrl", "v")
             pyautogui.press("enter")
+            print(f"[dev_tool] prompt enviado para '{project_slug}' — aguardando .claude-done")
 
         threading.Thread(target=_automate, daemon=True).start()
-        threading.Thread(target=_watch_sentinel, args=(done_event,), daemon=True).start()
+        threading.Thread(target=_watch_sentinel, daemon=True).start()
