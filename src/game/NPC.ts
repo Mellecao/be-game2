@@ -98,6 +98,14 @@ export class NPC extends Container {
     this.nameLabel.text = name;
   }
 
+  setWorking(active: boolean): void {
+    this.indicator.clear();
+    const fill   = active ? 0x22c55e : 0xffd700;
+    const stroke = active ? 0x166534 : 0x8b6f00;
+    this.indicator.circle(0, 0, 6).fill(fill);
+    this.indicator.circle(0, 0, 6).stroke({ color: stroke, width: 1 });
+  }
+
   update(dt: number) {
     this.time += dt * 0.05;
     this.indicator.y = this.indicatorBaseY + Math.sin(this.time) * 3;

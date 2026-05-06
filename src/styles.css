@@ -383,12 +383,20 @@ html, body {
   letter-spacing: 0.05em;
   white-space: nowrap;
 }
-.status-waiting   { background: #78350f; color: #fcd34d; }
-.status-delegating{ background: #1e3a5f; color: #93c5fd; }
-.status-running   { background: #3b0764; color: #d8b4fe; }
-.status-done      { background: #14532d; color: #86efac; }
-.status-error     { background: #7f1d1d; color: #fca5a5; }
-.status-cancelled { background: #1c1c1c; color: #94a3b8; }
+.status-waiting     { background: #78350f; color: #fcd34d; }
+.status-delegating  { background: #1e3a5f; color: #93c5fd; }
+.status-running     { background: #3b0764; color: #d8b4fe; }
+.status-planning    { background: #1e3a5f; color: #93c5fd; }
+.status-copywriting { background: #3b0764; color: #d8b4fe; }
+.status-designing   { background: #4a1942; color: #f0abfc; }
+.status-developing  { background: #064e3b; color: #6ee7b7; }
+.status-reviewing   { background: #78350f; color: #fcd34d; }
+.status-revision    { background: #7c2d12; color: #fb923c; }
+.status-deploying   { background: #312e81; color: #a5b4fc; }
+.status-closing     { background: #14532d; color: #86efac; }
+.status-done        { background: #14532d; color: #86efac; }
+.status-error       { background: #7f1d1d; color: #fca5a5; }
+.status-cancelled   { background: #1c1c1c; color: #94a3b8; }
 .task-countdown {
   font-size: 11px;
   color: #fcd34d;
@@ -423,6 +431,158 @@ html, body {
   padding: 32px 16px;
   font-size: 13px;
 }
+
+/* ── Tasks Back Button ── */
+#tasks-back {
+  background: transparent;
+  border: none;
+  color: #94a3b8;
+  font-size: 12px;
+  font-family: inherit;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  transition: color 0.15s;
+}
+#tasks-back:hover { color: #e2e8f0; }
+
+/* ── Task Detail View ── */
+.task-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px 12px;
+}
+.task-detail-name {
+  font-size: 13px;
+  font-weight: bold;
+  color: #e2e8f0;
+  line-height: 1.4;
+  word-break: break-word;
+}
+.task-detail-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.task-detail-step {
+  font-size: 11px;
+  color: #64748b;
+  letter-spacing: 0.02em;
+}
+.task-detail-agent {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: #1e1e2e;
+  border: 1px solid #333;
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+.task-detail-agent-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: bold;
+  color: #000;
+  flex-shrink: 0;
+  letter-spacing: 0.05em;
+}
+.task-detail-agent-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.task-detail-agent-name {
+  font-size: 12px;
+  font-weight: bold;
+  color: #e2e8f0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.task-detail-live {
+  font-size: 10px;
+  color: #22c55e;
+  font-weight: normal;
+  animation: live-pulse 1.6s ease-in-out infinite;
+}
+@keyframes live-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.4; }
+}
+.task-detail-agent-role {
+  font-size: 10px;
+  color: #475569;
+}
+.task-detail-log-label {
+  font-size: 10px;
+  font-weight: bold;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: #475569;
+  margin-top: 4px;
+}
+.task-detail-log {
+  font-size: 12px;
+  color: #94a3b8;
+  line-height: 1.5;
+  word-break: break-word;
+  background: #0d0d18;
+  border: 1px solid #222;
+  border-radius: 6px;
+  padding: 10px 12px;
+  min-height: 60px;
+  white-space: pre-wrap;
+}
+.task-terminal-label {
+  font-size: 10px;
+  font-weight: bold;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: #475569;
+  margin-top: 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.task-terminal-live-dot {
+  color: #22c55e;
+  font-size: 8px;
+  animation: task-terminal-blink 1s step-start infinite;
+}
+@keyframes task-terminal-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+.task-terminal {
+  font-family: 'Cascadia Code', 'Fira Code', 'Courier New', monospace;
+  font-size: 11px;
+  line-height: 1.6;
+  color: #86efac;
+  background: #050f05;
+  border: 1px solid #1a3a1a;
+  border-radius: 6px;
+  padding: 10px 12px;
+  min-height: 80px;
+  max-height: 280px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  margin-top: 4px;
+  scrollbar-width: thin;
+  scrollbar-color: #1a3a1a #050f05;
+}
+.task-terminal::-webkit-scrollbar { width: 4px; }
+.task-terminal::-webkit-scrollbar-track { background: #050f05; }
+.task-terminal::-webkit-scrollbar-thumb { background: #1a3a1a; border-radius: 2px; }
 
 /* ── Agents FAB ─────────────────────────────────────────────────────────────── */
 #agents-fab {

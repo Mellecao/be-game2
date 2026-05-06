@@ -25,6 +25,7 @@ def test_pipeline_completes_all_7_steps(monkeypatch):
     monkeypatch.setenv("TRELLO_API_KEY", "fakekey")
     monkeypatch.setenv("TRELLO_TOKEN", "faketoken")
     monkeypatch.setenv("TRELLO_LIST_ID", "fakelist")
+    monkeypatch.setenv("OPENROUTER_API_KEY", "fake-or-key")
 
     with patch("server.planner_loop.Crew") as mock_crew_cls, \
          patch("server.vault_writer.write_note", return_value=MagicMock()), \
@@ -52,6 +53,7 @@ def test_pipeline_aborts_when_qa_reprovado_twice(monkeypatch):
     monkeypatch.setenv("TRELLO_API_KEY", "fakekey")
     monkeypatch.setenv("TRELLO_TOKEN", "faketoken")
     monkeypatch.setenv("TRELLO_LIST_ID", "fakelist")
+    monkeypatch.setenv("OPENROUTER_API_KEY", "fake-or-key")
 
     call_count = {"n": 0}
 
@@ -87,6 +89,7 @@ def test_pipeline_continues_when_qa_approves_after_revision(monkeypatch):
     monkeypatch.setenv("TRELLO_API_KEY", "fakekey")
     monkeypatch.setenv("TRELLO_TOKEN", "faketoken")
     monkeypatch.setenv("TRELLO_LIST_ID", "fakelist")
+    monkeypatch.setenv("OPENROUTER_API_KEY", "fake-or-key")
 
     call_count = {"n": 0}
 
@@ -120,6 +123,7 @@ def test_pipeline_respects_cancellation(monkeypatch):
     monkeypatch.setenv("TRELLO_API_KEY", "fakekey")
     monkeypatch.setenv("TRELLO_TOKEN", "faketoken")
     monkeypatch.setenv("TRELLO_LIST_ID", "fakelist")
+    monkeypatch.setenv("OPENROUTER_API_KEY", "fake-or-key")
 
     task = _make_task()
 

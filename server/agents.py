@@ -10,6 +10,7 @@ llm = LLM(
     model="openrouter/deepseek/deepseek-v4-flash",
     base_url="https://openrouter.ai/api/v1",
     api_key=os.environ.get("OPENROUTER_API_KEY", ""),
+    stream=True,
 )
 
 

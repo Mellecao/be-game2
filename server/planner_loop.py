@@ -1,5 +1,6 @@
 from __future__ import annotations
 import datetime
+import json
 import os
 import re as _re
 import threading
@@ -12,7 +13,33 @@ from crewai import Crew
 
 from . import event_bus
 
-DELAY_SECONDS = 30
+DELAY_SECONDS = 180
+
+# ── Thread-local task context for LLM streaming ───────────────────────────────
+_tls = threading.local()
+
+try:
+    import litellm
+
+    class _ChunkLogger(litellm.CustomLogger):
+        def log_stream_event(self, kwargs, response_obj, start_time, end_time):
+            try:
+                task_id = getattr(_tls, "task_id", None)
+                if not task_id:
+                    return
+                choices = getattr(response_obj, "choices", None)
+                if not choices:
+                    return
+                delta = getattr(choices[0], "delta", None)
+                text = (getattr(delta, "content", None) or "") if delta else ""
+                if text:
+                    event_bus.emit("llm_chunk", json.dumps({"task_id": task_id, "text": text}))
+            except Exception:
+                pass
+
+    litellm.callbacks = [_ChunkLogger()]
+except Exception:
+    pass
 
 
 @dataclass
@@ -240,6 +267,8 @@ def _read_project_files(project_dir: str) -> str:
 
 def _run_pipeline(task: PlannerTask, card_name: str, card_desc: str) -> None:
     """Pipeline completo de 7 etapas para um card do Trello."""
+    _tls.task_id = task.id  # route LLM streaming tokens to this task
+
     from .agents import (
         create_copywriter, create_planner, create_designer,
         create_developer, create_qa, create_devops,

@@ -42,6 +42,13 @@ async function bootstrap() {
 
     const chat = new ChatPanel();
 
+    // Wire task status → NPC indicator color (yellow idle, green working)
+    tasksPanel.setAgentWorkingCallback((activeIds) => {
+      for (const npc of game.npcs) {
+        npc.setWorking(activeIds.has(npc.id));
+      }
+    });
+
     game.setNpcClickHandler((npc) => {
       chat.open({
         id: npc.id,

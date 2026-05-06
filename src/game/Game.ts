@@ -367,6 +367,11 @@ export class Game {
     this.agentEditor.bringToFront();
   }
 
+  setAgentWorking(agentId: string, active: boolean): void {
+    const npc = this.npcs.find((n) => n.id === agentId);
+    npc?.setWorking(active);
+  }
+
   setNpcClickHandler(handler: NPCClickHandler) {
     this.onNpcClick = handler;
   }
