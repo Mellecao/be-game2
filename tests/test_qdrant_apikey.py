@@ -24,8 +24,8 @@ def test_vault_tool_passes_api_key(monkeypatch):
     monkeypatch.setattr(vault_tool_module, "QDRANT_API_KEY", "test-key-456")
     monkeypatch.setattr(vault_tool_module, "QDRANT_URL", "http://127.0.0.1:6333")
 
-    # Reset singleton
-    vault_tool_module._tool_instance = None
+    # Reset singleton (monkeypatch restores original value after the test)
+    monkeypatch.setattr(vault_tool_module, "_tool_instance", None)
 
     with patch("server.vault_tool.QdrantClient") as mock_client_class:
         mock_instance = MagicMock()
@@ -57,26 +57,16 @@ def test_api_vault_status_passes_api_key(monkeypatch):
     monkeypatch.setenv("QDRANT_API_KEY", "test-key-789")
     monkeypatch.setenv("QDRANT_COLLECTION", "obsidian_vault")
 
-    mock_client_class = MagicMock()
-    mock_instance = MagicMock()
-    mock_client_class.return_value = mock_instance
-    mock_instance.get_collection.return_value = MagicMock(
-        points_count=0, status="green"
-    )
-
-    # The route does `from qdrant_client import QdrantClient` at call time,
-    # so we patch the QdrantClient name in the qdrant_client module directly.
-    with patch("qdrant_client.QdrantClient", mock_client_class):
-        # Import the route function after the env is set
-        import importlib
-        import server.api as api_module
-        importlib.reload(api_module)
-
+    from server import api as api_module
+    with patch.object(api_module, "QdrantClient") as mock_client:
+        mock_client.return_value.get_collection.return_value = MagicMock(
+            points_count=0, status="green"
+        )
         result = api_module.vault_status()
 
     assert result.get("ok") is True, f"Route returned error: {result}"
-    mock_client_class.assert_called_once()
-    kwargs = mock_client_class.call_args.kwargs
+    mock_client.assert_called_once()
+    kwargs = mock_client.call_args.kwargs
     assert kwargs.get("api_key") == "test-key-789", (
-        f"Expected api_key='test-key-789' but got: {mock_client_class.call_args}"
+        f"Expected api_key='test-key-789' but got: {mock_client.call_args}"
     )

@@ -15,6 +15,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from crewai import Crew
 from dotenv import load_dotenv
+from qdrant_client import QdrantClient
 
 from .agents import create_copywriter, create_developer, create_planner, create_vendedor
 from .tasks import create_chat_task, create_dev_task, create_planner_task
@@ -414,8 +415,6 @@ async def index_vault():
 def vault_status():
     """Returns Qdrant collection stats."""
     try:
-        from qdrant_client import QdrantClient
-        import os
         client = QdrantClient(
             url=os.getenv("QDRANT_URL", "http://localhost:6333"),
             api_key=os.getenv("QDRANT_API_KEY"),
