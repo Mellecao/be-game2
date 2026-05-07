@@ -145,6 +145,84 @@ def after_deploy(
             logging.getLogger(__name__).debug("bibliotecario: indexing skipped — %s", exc)
 
 
+def after_design(slug: str, guide_path: str, manifest_str: str, moc_path: str, index: bool = True) -> None:
+    """Pos-design: salva manifest JSON, atualiza MOC com link pro guia."""
+    today = date.today().isoformat()
+    manifest_relpath = f"Atlas/Utilities/Designer/{today}-{slug}-manifest.json"
+    full_manifest = VAULT_PATH / manifest_relpath
+    full_manifest.parent.mkdir(parents=True, exist_ok=True)
+    full_manifest.write_text(manifest_str, encoding="utf-8")
+
+    full_moc = VAULT_PATH / moc_path
+    if full_moc.exists():
+        text = full_moc.read_text(encoding="utf-8")
+        guide_link = f"[[{guide_path.replace('.md', '')}]]"
+        manifest_link = f"[[{manifest_relpath.replace('.json', '')}|asset_manifest]]"
+        if "## Design" in text and guide_link not in text:
+            insert = f"## Design\n- {guide_link}\n- Manifest: {manifest_link}\n"
+            text = text.replace("## Design\n", insert)
+            full_moc.write_text(text, encoding="utf-8")
+
+    if index:
+        try:
+            from server.obsidian_indexer import index_single_file
+            index_single_file(full_manifest)
+        except Exception as exc:
+            logging.getLogger(__name__).debug("after_design indexing skipped — %s", exc)
+
+
+def after_assets(slug: str, resolved_manifest: dict, project_dir: str, moc_path: str, index: bool = True) -> None:
+    """Pos-assets: cria notas listando PNGs e GLBs, atualiza MOC."""
+    today = date.today().isoformat()
+    images = resolved_manifest.get("images", [])
+
+    # ImageArtist note
+    img_lines = ["| id | png_path | purpose |", "|---|---|---|"]
+    for it in images:
+        img_lines.append(f"| {it.get('id', '')} | `{it.get('png_path', '')}` | {it.get('purpose', '')} |")
+    img_content = "\n".join(img_lines)
+
+    img_relpath = f"Atlas/Utilities/ImageArtist/{today}-{slug}-assets.md"
+    img_full = VAULT_PATH / img_relpath
+    img_full.parent.mkdir(parents=True, exist_ok=True)
+    from server.vault_writer import build_frontmatter
+    fm_img = build_frontmatter("image_artist", "resources", tags=["assets", slug])
+    img_full.write_text(f"---\n{fm_img}---\n\n# Assets PNG: {slug}\n\n{img_content}", encoding="utf-8")
+
+    # 3D Artist note
+    glb_items = [it for it in images if it.get("glb_path")]
+    glb_lines = ["| id | glb_path | source_png |", "|---|---|---|"]
+    for it in glb_items:
+        glb_lines.append(f"| {it.get('id', '')} | `{it.get('glb_path', '')}` | `{it.get('png_path', '')}` |")
+    glb_content = "\n".join(glb_lines) if glb_items else "_(nenhum modelo 3D gerado)_"
+
+    glb_relpath = f"Atlas/Utilities/3DArtist/{today}-{slug}-models.md"
+    glb_full = VAULT_PATH / glb_relpath
+    glb_full.parent.mkdir(parents=True, exist_ok=True)
+    fm_glb = build_frontmatter("agente_3d", "resources", tags=["assets-3d", slug])
+    glb_full.write_text(f"---\n{fm_glb}---\n\n# Modelos 3D: {slug}\n\n{glb_content}", encoding="utf-8")
+
+    # MOC update
+    full_moc = VAULT_PATH / moc_path
+    if full_moc.exists():
+        text = full_moc.read_text(encoding="utf-8")
+        img_link = f"[[{img_relpath.replace('.md', '')}|Lista de PNGs]]"
+        glb_link = f"[[{glb_relpath.replace('.md', '')}|Lista de GLBs]]"
+        if "## Imagens" in text and img_link not in text:
+            text = text.replace("## Imagens\n", f"## Imagens\n- {img_link}\n")
+        if "## Modelos 3D" in text and glb_link not in text:
+            text = text.replace("## Modelos 3D\n", f"## Modelos 3D\n- {glb_link}\n")
+        full_moc.write_text(text, encoding="utf-8")
+
+    if index:
+        try:
+            from server.obsidian_indexer import index_single_file
+            index_single_file(img_full)
+            index_single_file(glb_full)
+        except Exception as exc:
+            logging.getLogger(__name__).debug("after_assets indexing skipped — %s", exc)
+
+
 def context_query(question: str) -> str:
     """Busca semantica no vault para perguntas de contexto sobre projetos anteriores."""
     from server.vault_tool import get_vault_tool
