@@ -19,25 +19,14 @@ DELAY_SECONDS = 180
 _tls = threading.local()
 
 try:
-    import litellm
+    from crewai.utilities.streaming import crewai_event_bus, LLMStreamChunkEvent
 
-    class _ChunkLogger(litellm.CustomLogger):
-        def log_stream_event(self, kwargs, response_obj, start_time, end_time):
-            try:
-                task_id = getattr(_tls, "task_id", None)
-                if not task_id:
-                    return
-                choices = getattr(response_obj, "choices", None)
-                if not choices:
-                    return
-                delta = getattr(choices[0], "delta", None)
-                text = (getattr(delta, "content", None) or "") if delta else ""
-                if text:
-                    event_bus.emit("llm_chunk", json.dumps({"task_id": task_id, "text": text}))
-            except Exception:
-                pass
+    @crewai_event_bus.on(LLMStreamChunkEvent)
+    def _on_llm_chunk(source, event: LLMStreamChunkEvent) -> None:
+        task_id = getattr(_tls, "task_id", None)
+        if task_id and event.chunk:
+            event_bus.emit("llm_chunk", json.dumps({"task_id": task_id, "text": event.chunk}))
 
-    litellm.callbacks = [_ChunkLogger()]
 except Exception:
     pass
 

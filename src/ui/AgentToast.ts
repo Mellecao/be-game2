@@ -2,6 +2,9 @@ import type { TasksPanel } from "./TasksPanel";
 
 const DURATION_MS = 7000;
 
+// Events that should never show as toasts (too noisy or handled elsewhere)
+const SILENT_EVENTS = new Set(["llm_chunk", "pipeline_step", "qa_failed"]);
+
 type EventStyle = { bg: string };
 const EVENT_STYLES: Record<string, EventStyle> = {
   task_new:          { bg: "#78350f" },
@@ -9,6 +12,7 @@ const EVENT_STYLES: Record<string, EventStyle> = {
   dev_done:          { bg: "#14532d" },
   task_cancelled:    { bg: "#1c1c2e" },
   error:             { bg: "#7f1d1d" },
+  pipeline_done:     { bg: "#14532d" },
 };
 
 export class AgentToast {
@@ -62,7 +66,11 @@ export class AgentToast {
   }
 }
 
-export function connectEventStream(toast: AgentToast, tasks?: TasksPanel): void {
+export function connectEventStream(
+  toast: AgentToast,
+  tasks?: TasksPanel,
+  onLLMChunk?: (taskId: string, chunk: string) => void,
+): void {
   const source = new EventSource("/api/events/stream");
 
   source.onmessage = (e) => {
@@ -70,10 +78,20 @@ export function connectEventStream(toast: AgentToast, tasks?: TasksPanel): void 
       const event = JSON.parse(e.data) as { type: string; data: string };
       if (event.type === "connected") return;
 
-      toast.show(event.type, event.data);
+      // Route LLM chunks to the game world (whisper bubbles), never toast them
+      if (event.type === "llm_chunk") {
+        if (onLLMChunk) {
+          const chunk = JSON.parse(event.data) as { task_id: string; text: string };
+          onLLMChunk(chunk.task_id, chunk.text);
+        }
+        return;
+      }
 
-      // Atualiza o painel de tasks em eventos relevantes
-      if (tasks && ["task_new", "planner_delegating", "dev_done", "task_cancelled", "error"].includes(event.type)) {
+      if (!SILENT_EVENTS.has(event.type)) {
+        toast.show(event.type, event.data);
+      }
+
+      if (tasks && ["task_new", "planner_delegating", "dev_done", "task_cancelled", "error", "pipeline_done"].includes(event.type)) {
         tasks.notifyUpdate();
       }
     } catch {
@@ -83,6 +101,6 @@ export function connectEventStream(toast: AgentToast, tasks?: TasksPanel): void 
 
   source.onerror = () => {
     source.close();
-    setTimeout(() => connectEventStream(toast, tasks), 5000);
+    setTimeout(() => connectEventStream(toast, tasks, onLLMChunk), 5000);
   };
 }

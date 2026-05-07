@@ -17,7 +17,12 @@ async function bootstrap() {
   const toast = new AgentToast();
   const tasksPanel = new TasksPanel();
   new AgentsPanel();
-  connectEventStream(toast, tasksPanel);
+
+  // Whisper chunks are routed to NPCs after game.init (wired below)
+  let npcWhisperCallback: ((taskId: string, chunk: string) => void) | undefined;
+  connectEventStream(toast, tasksPanel, (taskId, chunk) => {
+    npcWhisperCallback?.(taskId, chunk);
+  });
 
   const app = new Application();
   await app.init({
@@ -48,6 +53,16 @@ async function bootstrap() {
         npc.setWorking(activeIds.has(npc.id));
       }
     });
+
+    // Wire LLM streaming chunks → whisper bubble on the active NPC
+    npcWhisperCallback = (_taskId: string, chunk: string) => {
+      for (const npc of game.npcs) {
+        if (npc.isWorking) {
+          npc.setWhisperChunk(chunk);
+          break;
+        }
+      }
+    };
 
     game.setNpcClickHandler((npc) => {
       chat.open({

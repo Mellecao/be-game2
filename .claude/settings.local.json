@@ -42,7 +42,9 @@
       "Bash(curl -s http://localhost:6333/collections/obsidian_vault)",
       "Bash(python -c \"import json,sys; d=json.load\\(sys.stdin\\); r=d['result']; print\\('vectors:', r['vectors_count'], '| status:', r['status']\\)\")",
       "Bash(python -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\(json.dumps\\(d['result']['config'], indent=2\\)\\); print\\('points_count:', d['result'].get\\('points_count'\\)\\)\")",
-      "Bash(python -c ' *)"
+      "Bash(python -c ' *)",
+      "WebFetch(domain:github.com)",
+      "Bash(uv *)"
     ]
   }
 }

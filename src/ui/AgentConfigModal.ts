@@ -88,7 +88,7 @@ export class AgentConfigModal {
       this.currentNpc.role = payload.role;
       this.currentNpc.goal = payload.goal;
       this.currentNpc.backstory = payload.backstory;
-      this.currentNpc.updateLabel(payload.display_name);
+      this.currentNpc.displayName = payload.display_name;
     } catch (err) {
       console.error("[AgentConfigModal] save failed", err);
     }
