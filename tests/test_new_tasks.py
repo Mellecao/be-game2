@@ -54,3 +54,18 @@ def test_create_creative_brief_task_includes_slug_and_briefing():
     assert isinstance(task, Task)
     assert "fintech-x" in task.description
     assert "Fintech X Landing" in task.description or "Landing pra produto B2B" in task.description
+
+
+def test_create_qa_brief_task_includes_paths():
+    from server.tasks import create_qa_brief_task
+    from crewai import Task
+    t = create_qa_brief_task({
+        "slug": "x",
+        "project_dir": "/tmp/projects/x",
+        "references_path": "/tmp/projects/x/research/references.json",
+    })
+    assert isinstance(t, Task)
+    assert "/tmp/projects/x" in t.description.replace("\\", "/")
+    assert "references.json" in t.description
+    assert "APROVADO" in t.description and "REPROVADO" in t.description
+    assert "fix_prompt" in t.description.lower()

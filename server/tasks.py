@@ -350,3 +350,33 @@ def create_creative_brief_task(context: dict) -> Task:
             f"\"references_path\": \"output/{slug}/research/references.json\"}}"
         ),
     )
+
+
+def create_qa_brief_task(context: dict) -> Task:
+    slug = context["slug"]
+    project_dir = context["project_dir"]
+    references_path = context.get("references_path", "")
+    return Task(
+        description=(
+            f"Voce e o Lead QA do projeto '{slug}'.\n\n"
+            f"Project dir: {project_dir}\n"
+            f"References: {references_path}\n\n"
+            f"Sequencia:\n"
+            f"1. QA-codigo revisa arquivos do projeto. Se REPROVADO, encerra com lista de issues.\n"
+            f"2. Se APROVADO, QA-visual:\n"
+            f"   a. server_runner: sobe servidor de {project_dir}, pega URL\n"
+            f"   b. browser_qa: tira screenshots multi-viewport (desktop/tablet/mobile) "
+            f"      e por secao em output/{slug}/qa_visual/current/\n"
+            f"   c. visual_diff: compara cada secao current vs ref correspondente "
+            f"      do Frankenstein em {references_path}\n"
+            f"   d. teardown do server_runner OBRIGATORIO mesmo em erro\n"
+            f"3. Se houver REPROVADO, redija output/{slug}/qa_visual/fix_prompt.md "
+            f"   agregando issues de codigo + visuais. Markdown estruturado por secao "
+            f"   com refs concretos (px, hex, paths de screenshots).\n"
+            f"4. Devolva veredicto final: APROVADO | REPROVADO."
+        ),
+        expected_output=(
+            "JSON estrito: {\"verdict\": \"APROVADO\"|\"REPROVADO\", "
+            "\"report_path\": \"...\", \"fix_prompt_path\": \"...\" (se REPROVADO)}"
+        ),
+    )
