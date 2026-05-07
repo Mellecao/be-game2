@@ -13,14 +13,18 @@ from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-from crewai import Crew
+from crewai import Crew, Task
 from dotenv import load_dotenv
 from qdrant_client import QdrantClient
 
-from .agents import create_copywriter, create_developer, create_planner, create_vendedor
+from .agents import (
+    create_copywriter, create_developer, create_planner, create_vendedor,
+    create_secretario, create_bibliotecario_agent,
+)
 from .tasks import create_chat_task, create_dev_task, create_planner_task
 from .supabase_client import get_supabase
-from . import event_bus, planner_loop
+from . import event_bus, planner_loop, agent_messages
+from . import db as _db
 
 load_dotenv()
 
@@ -626,6 +630,67 @@ async def events_stream():
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
+
+
+@app.on_event("startup")
+def _init_agent_messages_db():
+    _db.init_schema()
+
+
+@app.post("/api/chat/secretario")
+async def chat_secretario(payload: dict):
+    message = (payload.get("message") or "").strip()
+    if not message:
+        raise HTTPException(status_code=400, detail="mensagem vazia")
+
+    agent_messages.record("global", "player", "player", message)
+
+    agent = create_secretario()
+    task = Task(
+        description=(
+            f"O jogador perguntou: '{message}'\n\n"
+            "Use suas tools (get_pipeline_status, get_active_tasks, get_agent_history) "
+            "pra responder com dados reais. 1-3 frases, direto."
+        ),
+        expected_output="Resposta curta em portugues brasileiro.",
+        agent=agent,
+    )
+    crew = Crew(agents=[agent], tasks=[task], verbose=False)
+    reply = str(crew.kickoff()).strip()
+
+    agent_messages.record("global", "secretario", "reply", reply)
+    return {"reply": reply}
+
+
+@app.post("/api/chat/bibliotecario")
+async def chat_bibliotecario(payload: dict):
+    message = (payload.get("message") or "").strip()
+    if not message:
+        raise HTTPException(status_code=400, detail="mensagem vazia")
+
+    agent_messages.record("global", "player", "player", message)
+
+    agent = create_bibliotecario_agent()
+    task = Task(
+        description=(
+            f"O jogador perguntou: '{message}'\n\n"
+            "Use obsidian_vault_search pra buscar contexto antes de responder. "
+            "Cite a fonte (path da nota) quando aplicavel."
+        ),
+        expected_output="Resposta com contexto do vault, em portugues.",
+        agent=agent,
+    )
+    crew = Crew(agents=[agent], tasks=[task], verbose=False)
+    reply = str(crew.kickoff()).strip()
+
+    agent_messages.record("global", "bibliotecario", "reply", reply)
+    return {"reply": reply}
+
+
+@app.get("/api/agents/{agent_id}/messages")
+async def get_agent_messages(agent_id: str, limit: int = 200):
+    msgs = agent_messages.history(agent_id, limit=limit)
+    return {"messages": msgs}
 
 
 if __name__ == "__main__":
