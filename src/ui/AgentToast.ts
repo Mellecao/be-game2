@@ -1,9 +1,12 @@
 import type { TasksPanel } from "./TasksPanel";
+import type { ChatWindowManager } from "./ChatWindowManager";
+import type { NPC } from "../game/NPC";
+import type { AgentMessage } from "./ChatWindow";
 
 const DURATION_MS = 7000;
 
 // Events that should never show as toasts (too noisy or handled elsewhere)
-const SILENT_EVENTS = new Set(["llm_chunk", "pipeline_step", "qa_failed"]);
+const SILENT_EVENTS = new Set(["llm_chunk", "pipeline_step", "qa_failed", "agent_message"]);
 
 type EventStyle = { bg: string };
 const EVENT_STYLES: Record<string, EventStyle> = {
@@ -17,6 +20,8 @@ const EVENT_STYLES: Record<string, EventStyle> = {
 
 export class AgentToast {
   private container: HTMLElement;
+  private chatWindowManager: ChatWindowManager | null = null;
+  private npcRegistry: Record<string, NPC> | null = null;
 
   constructor() {
     this.container = document.getElementById("agent-toasts")!;
@@ -31,6 +36,33 @@ export class AgentToast {
       pointerEvents: "none",
       maxWidth: "360px",
     });
+  }
+
+  setChatWindowManager(mgr: ChatWindowManager): void {
+    this.chatWindowManager = mgr;
+  }
+
+  setNpcRegistry(reg: Record<string, NPC>): void {
+    this.npcRegistry = reg;
+  }
+
+  routeAgentMessage(payload: AgentMessage & { agent_id: string }): void {
+    const { agent_id, type, text } = payload;
+
+    // 1. Route to ChatWindowManager
+    if (this.chatWindowManager) {
+      this.chatWindowManager.appendMessage(agent_id, payload);
+    }
+
+    // 2. Route to NPC's BubbleStack
+    const npc = this.npcRegistry?.[agent_id];
+    if (!npc) return;
+
+    if (type === "whisper") {
+      npc.setWhisper(text);
+    } else if (type === "say" || type === "reply") {
+      npc.pushSay(text);
+    }
   }
 
   show(type: string, message: string): void {
@@ -83,6 +115,17 @@ export function connectEventStream(
         if (onLLMChunk) {
           const chunk = JSON.parse(event.data) as { task_id: string; text: string };
           onLLMChunk(chunk.task_id, chunk.text);
+        }
+        return;
+      }
+
+      // Route persisted agent_message → ChatWindowManager + NPC BubbleStack
+      if (event.type === "agent_message") {
+        try {
+          const payload = JSON.parse(event.data) as AgentMessage & { agent_id: string };
+          toast.routeAgentMessage(payload);
+        } catch {
+          // ignore malformed payloads
         }
         return;
       }
