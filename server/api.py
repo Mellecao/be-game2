@@ -174,6 +174,26 @@ AGENT_SEED = [
         "row": 6.0,
         "sprite_char": 3,
     },
+    {
+        "id": "image_artist",
+        "display_name": "Image Artist",
+        "role": "Artista Visual de IA",
+        "goal": "Gerar PNGs do asset_manifest via Flux Schnell, reportando id/path/prompt usado.",
+        "backstory": "Especialista em direcionar modelos de difusao com prompts em ingles. Traduz briefing PT-BR em prompts ricos antes de chamar flux_image.",
+        "col": 1.0,
+        "row": 4.0,
+        "sprite_char": 4,
+    },
+    {
+        "id": "agente_3d",
+        "display_name": "Agente 3D",
+        "role": "Artista 3D",
+        "goal": "Gerar GLBs via Hunyuan3D a partir de PNGs marcados convert_to_3d=true no manifest.",
+        "backstory": "Transforma imagens 2D em modelos 3D para Three.js. Sabe que o Hunyuan precisa do path absoluto do PNG.",
+        "col": 3.0,
+        "row": 4.0,
+        "sprite_char": 5,
+    },
 ]
 
 # Campos que devem ser mantidos sincronizados com o código (não inclui col/row/sprite_char)
@@ -201,6 +221,8 @@ _AGENT_DISPLAY = {
     "qa":            "QA",
     "devops":        "DevOps",
     "bibliotecario": "Bibliotecario",
+    "image_artist":  "Image Artist",
+    "agente_3d":     "Agente 3D",
 }
 
 
