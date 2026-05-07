@@ -416,7 +416,10 @@ def vault_status():
     try:
         from qdrant_client import QdrantClient
         import os
-        client = QdrantClient(url=os.getenv("QDRANT_URL", "http://localhost:6333"))
+        client = QdrantClient(
+            url=os.getenv("QDRANT_URL", "http://localhost:6333"),
+            api_key=os.getenv("QDRANT_API_KEY"),
+        )
         collection = os.getenv("QDRANT_COLLECTION", "obsidian_vault")
         info = client.get_collection(collection)
         return {

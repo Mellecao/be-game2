@@ -11,9 +11,11 @@ from typing import Type
 
 from crewai.tools import BaseTool
 from pydantic import BaseModel, Field
+from qdrant_client import QdrantClient
 
-QDRANT_URL  = os.getenv("QDRANT_URL", "http://localhost:6333")
-COLLECTION  = os.getenv("QDRANT_COLLECTION", "obsidian_vault")
+QDRANT_URL     = os.getenv("QDRANT_URL", "http://localhost:6333")
+QDRANT_API_KEY = os.getenv("QDRANT_API_KEY")
+COLLECTION     = os.getenv("QDRANT_COLLECTION", "obsidian_vault")
 EMBED_MODEL = "BAAI/bge-small-en-v1.5"
 TOP_K       = 5          # resultados por busca
 SCORE_MIN   = 0.35       # descarta chunks com similaridade baixa
@@ -36,12 +38,11 @@ class ObsidianVaultTool(BaseTool):
     def _run(self, query: str) -> str:
         try:
             from fastembed import TextEmbedding
-            from qdrant_client import QdrantClient
 
             model  = TextEmbedding(model_name=EMBED_MODEL)
             vector = next(iter(model.embed([query]))).tolist()
 
-            client  = QdrantClient(url=QDRANT_URL, check_compatibility=False)
+            client  = QdrantClient(url=QDRANT_URL, api_key=QDRANT_API_KEY, check_compatibility=False)
             response = client.query_points(
                 collection_name=COLLECTION,
                 query=vector,
