@@ -287,3 +287,65 @@ def context_query(question: str) -> str:
     from server.vault_tool import get_vault_tool
     tool = get_vault_tool()
     return tool._run(question)
+
+
+def _judge_call(prompt: str) -> str:
+    """Chama LLM julgador. Use o llm rapido (mesmo do crew) — gemma local seria ideal."""
+    from .agents import llm
+    return llm.call(messages=[{"role": "user", "content": prompt}])
+
+
+JUDGE_PROMPT_TEMPLATE = """Voce e o bibliotecario do vault Ideaverse. Decida se a nota
+abaixo deve ser indexada no Qdrant pra busca semantica em projetos futuros.
+
+Criterios SAVE (qualquer um):
+- Padrao novo do segmento
+- Stack inedita usada
+- Problema nao-trivial resolvido
+- Insight de mercado especifico
+- Referencia visual rara/SOTW
+
+Criterios SKIP (qualquer um):
+- Padrao generico ja comum no vault
+- Aprendizado obvio
+- Dossie fraco sem Frankenstein claro
+- Asset list generico sem proposito narrativo
+
+Tipo do artifact: {artifact_type}
+Contexto: {context}
+Resumo do conteudo:
+{content_summary}
+
+Devolva APENAS JSON estrito (sem markdown, sem hedge):
+{{"save": bool, "ace_type": "atlas"|"resources", "tags": [str], "priority": "high"|"medium"|"low", "reason": "...", "summary": "..."}}
+"""
+
+
+def judge_artifact(artifact_type: str, content_summary: str, context: dict) -> dict:
+    """Decide se um artifact deve ser indexado no Qdrant. Retorna dict com decisao."""
+    import json as _json
+
+    prompt = JUDGE_PROMPT_TEMPLATE.format(
+        artifact_type=artifact_type,
+        context=_json.dumps(context, ensure_ascii=False),
+        content_summary=content_summary[:2000],
+    )
+    raw = _judge_call(prompt)
+    try:
+        decision = _json.loads(raw.strip())
+        decision.setdefault("save", True)
+        decision.setdefault("ace_type", "atlas")
+        decision.setdefault("tags", [])
+        decision.setdefault("priority", "medium")
+        decision.setdefault("reason", "")
+        decision.setdefault("summary", "")
+        return decision
+    except _json.JSONDecodeError:
+        return {
+            "save": True,
+            "ace_type": "atlas",
+            "tags": [],
+            "priority": "medium",
+            "reason": "fallback: judge LLM malformed JSON; default save=True",
+            "summary": content_summary[:500],
+        }
