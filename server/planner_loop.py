@@ -403,45 +403,60 @@ def _run_pipeline(task: PlannerTask, card_name: str, card_desc: str) -> None:
         Crew(agents=[dev_agent], tasks=[create_dev_task(dev_agent, dev_message)], verbose=False).kickoff()
         librarian.after_dev(slug, project_dir, moc_path)
 
-        # ── 8. QA (era 5) — preserva loop de revisao existente ──────────────
-        if not _set(8, "reviewing", "QA revisando codigo..."):
+        # ── 8-9. CREW QA com loop de iteracao ────────────────────────────
+        MAX_QA_RETRIES = 2
+        verdict = "REPROVADO"
+        for attempt in range(MAX_QA_RETRIES + 1):
+            if not _set(9, "qa_crew", f"Crew QA revisando (tentativa {attempt+1}/{MAX_QA_RETRIES+1})..."):
+                return
+
+            qa_code_agent   = create_qa_code()
+            qa_visual_agent = create_qa_visual()
+
+            qa_crew = Crew(
+                agents=[qa_code_agent, qa_visual_agent],
+                tasks=[create_qa_brief_task({
+                    "slug":            slug,
+                    "project_dir":     project_dir,
+                    "references_path": f"output/{slug}/research/references.json",
+                })],
+                process=Process.hierarchical,
+                manager_llm=llm,
+                verbose=False,
+            )
+            qa_result = str(qa_crew.kickoff())
+            verdict = _parse_qa_verdict(qa_result)
+
+            qa_report = Path(f"output/{slug}/qa_visual/report.json")
+            qa_screens = Path(f"output/{slug}/qa_visual/current")
+            if qa_report.exists():
+                librarian.after_qa_visual(slug, str(qa_report), str(qa_screens), moc_path)
+
+            if verdict == "APROVADO":
+                break
+
+            if attempt < MAX_QA_RETRIES:
+                fix_prompt_path = Path(f"output/{slug}/qa_visual/fix_prompt.md")
+                if not fix_prompt_path.exists():
+                    event_bus.emit("warn", "QA reprovou mas fix_prompt nao foi gerado; abortando.")
+                    break
+                fix_prompt = fix_prompt_path.read_text(encoding="utf-8")
+                if not _set(8, "revision", f"Dev corrigindo (tentativa {attempt+2})..."):
+                    return
+                dev_rev = create_developer()
+                Crew(agents=[dev_rev],
+                     tasks=[create_dev_revision_task(dev_rev, {
+                         "slug": slug, "project_dir": project_dir, "qa_feedback": fix_prompt,
+                     })],
+                     verbose=False).kickoff()
+
+        if verdict != "APROVADO":
+            with _tasks_lock:
+                task.status = "qa_blocked"
+                task.log    = f"QA bloqueou apos {MAX_QA_RETRIES+1} tentativas"
+            event_bus.emit("qa_blocked", f"❌ '{card_name}' bloqueado pelo QA")
+            final_status = "qa_blocked"
             return
-
-        file_summary = _read_project_files(project_dir)
-        qa_agent     = create_qa()
-        qa_result    = str(Crew(agents=[qa_agent], tasks=[create_qa_task(qa_agent, {"slug": slug, "project_dir": project_dir, "file_summary": file_summary})], verbose=False).kickoff())
-
-        if "STATUS: REPROVADO" in qa_result:
-            if not _set(8, "revision", f"QA reprovou — Dev corrigindo os problemas..."):
-                return
-
-            print(f"[planner:{task.id[:8]}] QA REPROVOU — iniciando revisao com Dev")
-            event_bus.emit("qa_failed", f"⚠️ QA reprovou '{card_name}' — Dev revisando...")
-
-            dev_rev = create_developer()
-            Crew(agents=[dev_rev], tasks=[create_dev_revision_task(dev_rev, {
-                "slug":        slug,
-                "project_dir": project_dir,
-                "qa_feedback": qa_result,
-            })], verbose=False).kickoff()
-
-            if not _set(8, "reviewing", "QA revisando codigo corrigido..."):
-                return
-
-            file_summary2 = _read_project_files(project_dir)
-            qa_agent2     = create_qa()
-            qa_result2    = str(Crew(agents=[qa_agent2], tasks=[create_qa_task(qa_agent2, {"slug": slug, "project_dir": project_dir, "file_summary": file_summary2})], verbose=False).kickoff())
-
-            if "STATUS: REPROVADO" in qa_result2:
-                with _tasks_lock:
-                    task.status = "error"
-                    task.log    = f"QA reprovou apos revisao: {qa_result2[:300]}"
-                print(f"[planner:{task.id[:8]}] QA REPROVOU apos revisao — abortando pipeline")
-                event_bus.emit("error", f"❌ QA reprovou '{card_name}' após revisão")
-                final_status = "error"
-                return
-
-            print(f"[planner:{task.id[:8]}] QA APROVADO na segunda passagem apos revisao")
 
         # ── 9. DEPLOY (era 6) ────────────────────────────────────────────────
         if not _set(9, "deploying", "DevOps fazendo push para GitHub + Netlify..."):
