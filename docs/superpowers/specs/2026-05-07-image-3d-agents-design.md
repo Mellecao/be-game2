@@ -25,22 +25,32 @@ O pipeline atual de 7 etapas (`server/planner_loop.py`) entrega sites Three.js/G
 - Cache de imagens/modelos por prompt.
 - Substituir o LLM principal — vision LLM convive com `deepseek/deepseek-v4-flash` apenas no agente revisor.
 
-## Pipeline Final (10 etapas)
+## Pipeline Final (10 etapas + curadoria)
 
 ```
-1. Planner       (MOC + Effort no vault)
-2. Copywriter    (copy markdown → vault)
-3. Designer      (guia visual + asset_manifest JSON → vault)
-4. Image Artist  (gera PNGs do manifest → output/{slug}/assets/)
-5. Designer Rev  (vision LLM revisa cada PNG; max 1 retry de regen)
-6. 3D Artist     (gera GLBs dos PNGs com convert_to_3d=true)
-7. Developer     (consome guia + manifest_resolved → Claude CLI)
-8. QA            (revisão estática; loop de revisão se REPROVADO)
-9. DevOps        (push GitHub + deploy Netlify)
-10. Planner      (fechamento + Trello → DONE)
+ 1. Planner       (MOC + Effort no vault)
+ 2. Copywriter    (copy markdown → vault)
+ 3. Designer      (guia visual + asset_manifest JSON → vault)
+ 4. Image Artist  (gera PNGs do manifest → output/{slug}/assets/)
+ 5. Designer Rev  (vision LLM revisa cada PNG; max 1 retry de regen)
+ 6. 3D Artist     (gera GLBs dos PNGs com convert_to_3d=true)
+ 7. Developer     (consome guia + manifest_resolved → Claude CLI)
+ 8. QA            (revisão estática; loop de revisão se REPROVADO)
+ 9. DevOps        (push GitHub + deploy Netlify)
+10. Planner       (fechamento + Trello → DONE)
+
+— pipeline encerrado —
+
+C. Bibliotecario (curadoria pós-pipeline)
+   Roda como agente CrewAI separado, status="curating".
+   Lê pipeline.log + estrutura ACE atual + Qdrant, decide:
+   • Arquivos no lugar certo (Atlas/Calendar/Efforts)?
+   • MOCs com links corretos?
+   • O que apagar (drafts intermediários, duplicatas, temp)?
+   Escreve nota de curadoria final.
 ```
 
-Todas as etapas respeitam o cancelamento da task (check `task.status == "cancelled"` antes de cada etapa).
+Todas as etapas (1-10) respeitam o cancelamento da task. **A fase C (curadoria) não é cancelável** — sempre roda no fim, mesmo se o pipeline terminou em erro, para garantir que o vault não fique inconsistente.
 
 ## Asset Manifest (contrato Designer→Imagens→3D)
 
@@ -110,19 +120,27 @@ Salvo em `output/{slug}/assets/manifest_resolved.json`. Dev consome no prompt do
 | `tests/test_hunyuan3d_tool.py` | `test_hunyuan_returns_glb_path` (mock POST → JSON com `path`), `test_hunyuan_handles_api_error` (ConnectionError), `test_hunyuan_validates_image_exists` (path inexistente → erro antes do POST). |
 | `tests/test_asset_manifest.py` | `test_parse_valid_manifest`, `test_parse_missing_fence`, `test_parse_invalid_json`, `test_parse_extracts_only_first_fence`. |
 | `tests/test_pipeline_assets.py` | Stub de `Crew.kickoff` para retornar manifest fake; valida (a) `manifest_resolved.json` é escrito com `png_path` e `glb_path`; (b) step count chega em 10; (c) Hunyuan offline em todas as imagens NÃO aborta; (d) Forge offline em todas aborta com `task.status == "error"`; (e) Designer review reprovado dispara 1 regen e segue. |
+| `server/pipeline_logger.py` | Logger append-only JSONL por task. `log_event(slug, event, payload)` resolve para `output/{slug}/.pipeline.log`. `read_log(slug)` lê e parseia. `set_active_slug(slug)` / `get_active_slug()` thread-local pra emissores que não recebem slug. Eventos: `step_start`, `step_end`, `vault_write`, `vault_move`, `vault_delete`, `asset_generated`, `asset_review`, `pipeline_done`, `pipeline_error`. Cada entry tem `ts`, `event`, `agent_id`, payload-específicos. |
+| `server/pipeline_log_tool.py` | `PipelineLogTool(BaseTool)` — wrapper CrewAI ao redor de `read_log()`. `_run(slug: str)` retorna JSON com a lista de eventos para o LLM bibliotecario raciocinar. Usado apenas no `create_bibliotecario()` (via `create_curator_finalize_task`). |
+| `server/vault_organize_tool.py` | `VaultOrganizeTool(BaseTool)` — multi-op com `op` ∈ `{"list", "read", "move", "delete"}`. Restringe rigorosamente paths a `VAULT_PATH/**` ou `output/<slug>/**`. Bloqueia `..`, paths absolutos fora dos roots permitidos, `.git/`, e qualquer path que escape via symlink. Operações destrutivas (move/delete) escrevem entrada no `pipeline_logger`. |
+| `tests/test_pipeline_logger.py` | (a) Logs em JSONL são append-only; (b) read_log parseia entradas em ordem; (c) chamadas concorrentes não corrompem o arquivo; (d) slug inválido falha cedo. |
+| `tests/test_vault_organize_tool.py` | (a) `list` em path válido retorna arquivos; (b) `read` em path válido retorna conteúdo; (c) `move`/`delete` dentro do vault funciona; (d) tentativa com `..` é bloqueada; (e) path absoluto fora dos roots é bloqueado; (f) symlink apontando pra fora é bloqueado; (g) `delete` em `.git/` é bloqueado. |
+| `tests/test_curation_phase.py` | Stub de pipeline_log fake + LLM mockado retornando ações; valida que (a) bibliotecario é invocado mesmo se pipeline terminou em erro; (b) movimentações ACE são executadas; (c) deletes ficam dentro do vault; (d) nota de curadoria é escrita em `Atlas/Notes/Agentes/Bibliotecario/{date}-{slug}-curation.md`. |
 
 ### Modificados
 
 | Arquivo | Mudança |
 |---|---|
-| `server/agents.py` | + `vision_llm` (LLM separada apontando pra `openai/gpt-4o-mini` via OpenRouter, modelo override por env `VISION_MODEL`). + `create_image_artist()` (tools: `[FluxImageTool()]`, `llm=llm`). + `create_3d_artist()` (tools: `[Hunyuan3DTool()]`, `llm=llm`). + `create_designer_reviewer()` (mesma persona do designer mas `llm=vision_llm`, tools vazias). |
-| `server/tasks.py` | + `create_image_pipeline_task(agent, context)` (recebe `slug`, `manifest`, itera images, chama `flux_image` por item, escreve `manifest_resolved.json`). + `create_3d_pipeline_task(agent, context)` (lê `manifest_resolved.json`, filtra `convert_to_3d=true`, chama `hunyuan3d` por item, atualiza `manifest_resolved.json` com `glb_path`). + `create_designer_review_task(agent, context)` (recebe `manifest_resolved`, monta mensagem multimodal com cada PNG em base64 + `purpose` + trecho do guia, espera JSON: `{"reviews": [{"id", "verdict", "reason", "regen_prompt"}]}`). **Modifica `create_designer_task()`** acrescentando exigência do bloco `asset_manifest` JSON no final. |
-| `server/planner_loop.py` | Pipeline cresce de 7 para 10 etapas. Status enum ganha `imagining`, `reviewing_assets`, `regen_assets`, `modeling_3d`. Adiciona helpers `_run_imagining()`, `_run_designer_review()` (com loop de regen, max_retries=1), `_run_3d()`. `step` field e prints sobem de `[N/7]` pra `[N/10]`. Atualiza chamada `librarian.after_*` em pontos novos. |
+| `server/agents.py` | + `vision_llm` (LLM separada apontando pra `openai/gpt-4o-mini` via OpenRouter, modelo override por env `VISION_MODEL`). + `create_image_artist()` (tools: `[FluxImageTool()]`, `llm=llm`). + `create_3d_artist()` (tools: `[Hunyuan3DTool()]`, `llm=llm`). + `create_designer_reviewer()` (mesma persona do designer mas `llm=vision_llm`, tools vazias). **Modifica `create_bibliotecario()`** — adiciona tools `[get_vault_tool(), VaultOrganizeTool(), PipelineLogTool()]` (LLM continua sendo `llm`/deepseek-v4-flash). |
+| `server/tasks.py` | + `create_image_pipeline_task(agent, context)` (recebe `slug`, `manifest`, itera images, chama `flux_image` por item, escreve `manifest_resolved.json`). + `create_3d_pipeline_task(agent, context)` (lê `manifest_resolved.json`, filtra `convert_to_3d=true`, chama `hunyuan3d` por item, atualiza `manifest_resolved.json` com `glb_path`). + `create_designer_review_task(agent, context)` (recebe `manifest_resolved`, monta mensagem multimodal com cada PNG em base64 + `purpose` + trecho do guia, espera JSON: `{"reviews": [{"id", "verdict", "reason", "regen_prompt"}]}`). + `create_curator_finalize_task(agent, context)` (recebe `slug`, `pipeline_log`, `moc_path`, `final_status`; instrui bibliotecario a ler log, validar ACE, mover/deletar onde necessário, escrever nota de curadoria final). **Modifica `create_designer_task()`** acrescentando exigência do bloco `asset_manifest` JSON no final. |
+| `server/planner_loop.py` | Pipeline cresce de 7 para 10 etapas. Status enum ganha `imagining`, `reviewing_assets`, `regen_assets`, `modeling_3d`, `curating`. Adiciona helpers `_run_imagining()`, `_run_designer_review()` (com loop de regen, max_retries=1), `_run_3d()`, `_run_curation()` (sempre roda no fim, mesmo após erro/cancelamento — `try/finally`). `step` field e prints sobem de `[N/7]` pra `[N/10]`. Atualiza chamadas `librarian.after_*` em pontos novos. Toda chamada `Crew(...).kickoff()` e `vault_writer.write_note()` agora gera entrada no `pipeline_logger`. |
+| `server/librarian.py` | Mantém os helpers existentes (`after_copy`, `after_dev`, `after_deploy`). + `after_design()`, + `after_assets()` (descritos abaixo). Cada helper agora chama `pipeline_logger.log_event(...)` com `event="vault_write"` ou `"vault_move"` para que a curadoria final tenha visibilidade. |
+| `server/vault_writer.py` | + chamada `pipeline_logger.log_event(slug, "vault_write", {"path": ..., "agent": agent_id, "ace_type": ace_type})` no fim de `write_note()`. Slug deduzido do path do MOC ativo via thread-local context (mesmo padrão do `_tls.task_id` em `planner_loop.py`). |
 | `server/api.py` | + 2 entradas em `AGENT_SEED`: `image_artist` em col=1, row=4, sprite_char=4. `agente_3d` em col=3, row=4, sprite_char=5. Atualiza `_AGENT_DISPLAY` com os display names. Adiciona `api_key=os.getenv("QDRANT_API_KEY")` ao `QdrantClient` na linha 419. |
 | `server/obsidian_indexer.py` | + `QDRANT_API_KEY = os.getenv("QDRANT_API_KEY")` no topo. Adiciona `api_key=QDRANT_API_KEY` aos 3 `QdrantClient(...)`. |
 | `server/vault_tool.py` | Mesma mudança: lê env e passa `api_key` ao `QdrantClient`. |
 | `server/librarian.py` | + `after_design(slug, guide_path, manifest_json_str, moc_path, index=True)` — escreve `Atlas/Utilities/Designer/{date}-{slug}-manifest.json` no vault e atualiza MOC com seção `## Design`. + `after_assets(slug, resolved_manifest, project_dir, moc_path, index=True)` — escreve `Atlas/Utilities/ImageArtist/{date}-{slug}-assets.md` (tabela com id/prompt/path) e `Atlas/Utilities/3DArtist/{date}-{slug}-models.md` (tabela com id/glb_path/source_image), atualiza MOC com `## Imagens` e `## Modelos 3D`. |
-| `src/ui/TasksPanel.ts` | + 4 entradas em `STATUS_TO_AGENT` (linha 45): `imagining→image_artist`, `reviewing_assets→designer`, `regen_assets→image_artist`, `modeling_3d→agente_3d`. + 2 entradas em `AGENT_INFO` (linha 56): `image_artist`, `agente_3d` (initials, color, role). + 4 entradas em `ACTIVE_STATUSES` (linha 65). |
+| `src/ui/TasksPanel.ts` | + 5 entradas em `STATUS_TO_AGENT` (linha 45): `imagining→image_artist`, `reviewing_assets→designer`, `regen_assets→image_artist`, `modeling_3d→agente_3d`, `curating→bibliotecario`. + 2 entradas em `AGENT_INFO` (linha 56): `image_artist`, `agente_3d`, `bibliotecario` (initials, color, role; bibliotecario pode já ter entrada — verificar). + 5 entradas em `ACTIVE_STATUSES` (linha 65). |
 | `.env.example` (se existir) ou doc | Adiciona `QDRANT_API_KEY=` (vazio com comentário), `VISION_MODEL=openai/gpt-4o-mini`, `FORGE_API_URL=http://127.0.0.1:7860`, `HUNYUAN_API_URL=http://127.0.0.1:8081`. |
 
 ### Não modificados
@@ -195,9 +213,122 @@ Comportamento existente que se aplica sem código novo:
 
 **Justificativa da assimetria Image vs 3D:** site sem imagens fica visualmente quebrado; site sem GLB ainda renderiza (decoração).
 
-## Bibliotecario (Obsidian)
+## Bibliotecario (observador + curador)
 
-Estrutura no vault após pipeline:
+O bibliotecario **não roda como step do pipeline**. Ele observa passivamente via log e age uma vez no fim como agente CrewAI.
+
+### Pipeline Logger (observação passiva)
+
+`server/pipeline_logger.py` — JSONL append-only por task.
+
+**Path:** `output/{slug}/.pipeline.log` (mesma pasta dos assets, fácil de localizar).
+
+**API:**
+```python
+log_event(slug: str, event: str, payload: dict) -> None
+read_log(slug: str) -> list[dict]
+set_active_slug(slug: str) -> None  # thread-local, similar ao _tls.task_id
+get_active_slug() -> str | None
+```
+
+**Eventos capturados:**
+| Evento | Quem emite | Payload |
+|---|---|---|
+| `step_start` | `planner_loop._set()` | `step`, `status`, `agent_id` |
+| `step_end` | `planner_loop._set()` (próxima chamada ou `finally`) | `step`, `duration_s` |
+| `vault_write` | `vault_writer.write_note()` | `path`, `agent_id`, `ace_type`, `tags` |
+| `vault_move` | `librarian.after_deploy` (effort archive) e `VaultOrganizeTool` | `src_path`, `dst_path`, `actor` |
+| `vault_delete` | `VaultOrganizeTool` | `path`, `actor`, `reason` |
+| `asset_generated` | `FluxImageTool`, `Hunyuan3DTool` | `agent_id`, `asset_id`, `path`, `kind` (png/glb) |
+| `asset_review` | `create_designer_review_task` | `asset_id`, `verdict`, `reason` |
+| `pipeline_done` | `_run_pipeline` ao final | `github_url`, `netlify_url` |
+| `pipeline_error` | `_run_pipeline` no `except` | `step`, `error_msg` |
+
+O slug ativo é setado uma vez em `_run_pipeline` (`pipeline_logger.set_active_slug(slug)`) e os emissores (vault_writer, tools) leem do thread-local. Se não houver slug ativo (ex: chamada de chat fora do pipeline), o log é skip silenciosamente.
+
+### Vault Organize Tool
+
+`server/vault_organize_tool.py` — único tool com poder de modificar arquivos no vault e em `output/{slug}/`. Argumento `op`:
+
+| `op` | Args | Comportamento |
+|---|---|---|
+| `list` | `path: str` | Lista arquivos/dirs em `path` (relativo ao root permitido) |
+| `read` | `path: str` | Retorna até 8000 chars de conteúdo |
+| `move` | `src: str`, `dst: str` | Move arquivo, cria dirs intermediários |
+| `delete` | `path: str`, `reason: str` | Remove arquivo (não dir recursivo) |
+
+**Roots permitidos** (configuráveis via env, defaults sensatos):
+- `VAULT_PATH` (Obsidian)
+- `output/{active_slug}/` (project sandbox)
+
+**Bloqueios** (cada chamada valida antes de executar):
+1. Path absoluto fora dos roots → ❌
+2. Path com `..` que escapa do root via `Path.resolve()` → ❌
+3. Path inicia com `.git/` ou contém `/.git/` → ❌
+4. Symlink que aponta pra fora → ❌
+5. `delete` em diretório → ❌ (apenas arquivos)
+6. `move` para fora dos roots → ❌
+
+Cada operação destrutiva (move/delete) escreve `vault_move`/`vault_delete` no pipeline_logger antes de executar (audit trail).
+
+### Curation Phase (fase C)
+
+Após o `_run_pipeline` retornar (sucesso, erro ou cancelamento), `_run_curation(task, slug, final_status)` é chamado num bloco `try/finally`. Não conta como step do pipeline (não incrementa `task.step`), mas `task.status = "curating"` durante a execução, fazendo o NPC do bibliotecario acender no game.
+
+**Implementação** (alto nível):
+```python
+def _run_curation(task, slug, moc_path, effort_path, final_status):
+    with _tasks_lock:
+        task.status = "curating"
+        task.log = "Bibliotecario fazendo curadoria final do projeto..."
+    event_bus.emit("pipeline_step", f"[C] Bibliotecario curando {slug}...")
+
+    bibliotecario = create_bibliotecario()
+    crew_task = create_curator_finalize_task(bibliotecario, {
+        "slug": slug,
+        "moc_path": moc_path,
+        "effort_path": effort_path,
+        "final_status": final_status,
+        "log_path": f"output/{slug}/.pipeline.log",
+    })
+    Crew(agents=[bibliotecario], tasks=[crew_task], verbose=False).kickoff()
+
+    with _tasks_lock:
+        # Restaura status final do pipeline (não sobrescreve done/error/cancelled)
+        task.status = final_status
+        task.log = f"{task.log} | curadoria concluida"
+```
+
+**O que o bibliotecario faz** (instruído pelo `create_curator_finalize_task`):
+1. Lê o log via `PipelineLogTool.read_log(slug)`
+2. Identifica todos os arquivos escritos no vault (eventos `vault_write`)
+3. Valida estrutura ACE — cada arquivo está no bucket correto?
+   - `atlas` → `Atlas/` (Maps, Notes, Utilities)
+   - `calendar` → `Calendar/`
+   - `efforts` → `Efforts/On|Ongoing|Simmering|Archives`
+   - `cards`, `sources`, `resources` → `Atlas/Notes/Cards|Sources|...`
+4. Identifica disposable (heurísticas + julgamento LLM):
+   - Drafts intermediários (ex: `*-rev1.md` quando existe `*.md` mais recente)
+   - Notas com mesmo título no mesmo bucket (duplicatas)
+   - Arquivos vazios (< 50 chars de conteúdo útil)
+   - **NÃO** apaga arquivos do `output/{slug}/` (esses vão pro git)
+5. Move/deleta via `VaultOrganizeTool`
+6. Atualiza MOC do projeto com seção `## Curadoria` listando: o que foi consolidado, o que foi removido (com motivo)
+7. Escreve nota final em `Atlas/Notes/Agentes/Bibliotecario/{date}-{slug}-curation.md` com summary
+
+**Idempotência:** se a curadoria rodar duas vezes (raro mas possível em retry manual), `VaultOrganizeTool.move` skipa silenciosamente se `dst` já existe e `src` não. Delete skipa se path não existe.
+
+### Visualização do bibliotecario no game
+
+A entrada do bibliotecario já existe em `AGENT_SEED` (`server/api.py:166`). O NPC já é renderizado. Falta só:
+- `STATUS_TO_AGENT["curating"] = "bibliotecario"` em `src/ui/TasksPanel.ts`
+- Adicionar `curating` em `ACTIVE_STATUSES`
+
+Durante a curadoria, o whisper bubble do bibliotecario mostra os tokens do LLM streaming via o mesmo mecanismo `_tls.task_id` (já é setado no `_run_pipeline`).
+
+## Bibliotecario — atualizações no vault (estrutura ACE)
+
+Estrutura no vault após pipeline + curadoria:
 
 ```
 Atlas/
@@ -231,6 +362,11 @@ MOC do projeto ganha seções:
 Chamadas no `_run_pipeline`:
 - `librarian.after_design(slug, guide_path, manifest_str, moc_path)` — após etapa 3.
 - `librarian.after_assets(slug, resolved_manifest, project_dir, moc_path)` — após etapa 6.
+
+Após `_run_pipeline` terminar (em `_start_task` ou similar), no bloco `finally`:
+- `_run_curation(task, slug, moc_path, effort_path, final_status)` — sempre roda, mesmo em erro/cancelamento.
+
+A curadoria pode adicionar/mover/remover arquivos. Mudanças vão pro MOC seção `## Curadoria` e à nota `Atlas/Notes/Agentes/Bibliotecario/{date}-{slug}-curation.md`.
 
 ## Qdrant — Migração para 6333 com API Key
 
