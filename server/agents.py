@@ -2,12 +2,23 @@ import os
 
 from crewai import Agent, LLM
 from .dev_tool import OpenClaudeCliTool
+from .flux_tool import FluxImageTool
 from .github_tool import get_github_tool
+from .hunyuan3d_tool import Hunyuan3DTool
+from .pipeline_log_tool import PipelineLogTool
 from .trello_tool import TrelloListCardsTool
+from .vault_organize_tool import VaultOrganizeTool
 from .vault_tool import get_vault_tool
 
 llm = LLM(
     model="openrouter/deepseek/deepseek-v4-flash",
+    base_url="https://openrouter.ai/api/v1",
+    api_key=os.environ.get("OPENROUTER_API_KEY", ""),
+    stream=True,
+)
+
+vision_llm = LLM(
+    model=os.environ.get("VISION_MODEL", "openai/gpt-4o-mini"),
     base_url="https://openrouter.ai/api/v1",
     api_key=os.environ.get("OPENROUTER_API_KEY", ""),
     stream=True,
@@ -171,19 +182,76 @@ def create_bibliotecario() -> Agent:
     return Agent(
         role="Bibliotecario de Conhecimento (Knowledge Curator)",
         goal=(
-            "Organizar todos os outputs dos agentes na estrutura ACCESS do Obsidian, "
-            "garantir que MOCs estejam atualizados, padronizar nomes de arquivos e "
-            "documentar aprendizados tecnicos para o uso futuro do Planner."
+            "Organizar todos os outputs dos agentes na estrutura ACE do Obsidian (Atlas, Calendar, Efforts), "
+            "ler o pipeline log para entender o que cada agente fez, mover/apagar arquivos descartaveis "
+            "(drafts, duplicatas, notas vazias), atualizar MOCs e escrever uma nota final de curadoria."
         ),
         backstory=(
             "Voce e um arquivista meticuloso do Ideaverse da Black Elephant. "
-            "Nao tolera arquivos como 'layout_final_2.png'. Cada entrega fica "
-            "organizada para que o 'eu do futuro' encontre em segundos. "
-            "Use obsidian_vault_search para contexto de projetos anteriores. "
+            "Nao tolera arquivos como 'layout_final_2.png'. Cada entrega fica organizada para que "
+            "o 'eu do futuro' encontre em segundos. Use pipeline_log para saber o que aconteceu, "
+            "obsidian_vault_search para contexto, e vault_organize para mover/apagar/listar/ler arquivos. "
             "Responde em portugues brasileiro."
         ),
-        tools=[get_vault_tool()],
+        tools=[get_vault_tool(), VaultOrganizeTool(), PipelineLogTool()],
         llm=llm,
+        verbose=False,
+        allow_delegation=False,
+    )
+
+
+def create_image_artist() -> Agent:
+    return Agent(
+        role="Artista Visual de IA",
+        goal=(
+            "Receber um asset_manifest e gerar PNGs de alta qualidade via flux_image. "
+            "Traduzir cada prompt_pt em um prompt detalhado em ingles antes de chamar a tool."
+        ),
+        backstory=(
+            "Voce e um artista visual da Black Elephant especializado em direcionar modelos "
+            "de difusao. Domina vocabulario fotografico em ingles (lente, iluminacao, composicao). "
+            "Responde em portugues brasileiro reportando o que gerou."
+        ),
+        tools=[FluxImageTool()],
+        llm=llm,
+        verbose=False,
+        allow_delegation=False,
+    )
+
+
+def create_3d_artist() -> Agent:
+    return Agent(
+        role="Artista 3D",
+        goal=(
+            "Receber um manifest_resolved.json com PNGs marcados convert_to_3d=true e "
+            "gerar GLBs via hunyuan3d_generate, atualizando o manifest com glb_path."
+        ),
+        backstory=(
+            "Voce e um artista 3D da Black Elephant especializado em transformar imagens 2D "
+            "em modelos GLB para Three.js. Sabe que o Hunyuan precisa do path absoluto do PNG. "
+            "Responde em portugues brasileiro listando os modelos gerados."
+        ),
+        tools=[Hunyuan3DTool()],
+        llm=llm,
+        verbose=False,
+        allow_delegation=False,
+    )
+
+
+def create_designer_reviewer() -> Agent:
+    return Agent(
+        role="UI/UX Designer Revisor",
+        goal=(
+            "Avaliar visualmente cada PNG gerado, comparando com o purpose declarado no "
+            "manifest e o mood do guia visual. Devolver JSON com {id, verdict, reason, regen_prompt}."
+        ),
+        backstory=(
+            "Voce e o mesmo designer que escreveu o guia visual. Agora esta avaliando se os "
+            "PNGs gerados pelo Image Artist atendem ao briefing. Quando algo nao serve, "
+            "fornece um regen_prompt em ingles que corrige o problema. Responde em JSON estrito."
+        ),
+        tools=[],
+        llm=vision_llm,
         verbose=False,
         allow_delegation=False,
     )
