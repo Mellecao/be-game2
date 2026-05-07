@@ -1,6 +1,7 @@
 # server/flux_tool.py
 import base64
 import os
+import threading
 import time
 from pathlib import Path
 
@@ -9,6 +10,9 @@ from crewai.tools import BaseTool
 from pydantic import Field
 
 from . import pipeline_logger
+
+# Garante uma única request ao Forge por vez, mesmo com múltiplas threads de pipeline rodando em paralelo
+_flux_lock = threading.Semaphore(1)
 
 
 class FluxImageTool(BaseTool):
@@ -30,6 +34,10 @@ class FluxImageTool(BaseTool):
     sampler_name: str = Field(default="Euler")
 
     def _run(self, prompt: str) -> str:
+        with _flux_lock:
+            return self._generate(prompt)
+
+    def _generate(self, prompt: str) -> str:
         payload = {
             "prompt": prompt,
             "steps": self.steps,
