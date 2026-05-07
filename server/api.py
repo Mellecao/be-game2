@@ -194,6 +194,26 @@ AGENT_SEED = [
         "row": 4.0,
         "sprite_char": 5,
     },
+    {
+        "id": "researcher",
+        "display_name": "Researcher",
+        "role": "Pesquisador de Referencias e Concorrencia",
+        "goal": "Entregar dossie com refs awwwards/dribbble/behance + competidores, screenshots por secao e analise via vision LLM.",
+        "backstory": "Designer/UX research da Black Elephant. Conhece awwwards de cor e propoe combinacoes 'Frankenstein' das melhores secoes.",
+        "col": 5.0,
+        "row": 4.0,
+        "sprite_char": 1,
+    },
+    {
+        "id": "qa_visual",
+        "display_name": "QA Visual",
+        "role": "QA Visual / UX Reviewer",
+        "goal": "Comparar site renderizado com refs do Researcher via browser automation + visual diff. Veredicto por secao e fix_prompt se reprovado.",
+        "backstory": "Designer-QA hibrido. Le um print e diz 'essa margem esta 8px maior que a ref'. Trabalha sempre com references.json em maos.",
+        "col": 7.0,
+        "row": 4.0,
+        "sprite_char": 2,
+    },
 ]
 
 # Campos que devem ser mantidos sincronizados com o código (não inclui col/row/sprite_char)
@@ -223,6 +243,9 @@ _AGENT_DISPLAY = {
     "bibliotecario": "Bibliotecario",
     "image_artist":  "Image Artist",
     "agente_3d":     "Agente 3D",
+    "researcher":    "Researcher",
+    "qa_visual":     "QA Visual",
+    "qa_code":       "QA Codigo",
 }
 
 
