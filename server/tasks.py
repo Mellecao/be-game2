@@ -76,8 +76,13 @@ def create_planner_moc_task(agent: Agent, context: dict) -> Task:
 
 
 def create_copywriter_pipeline_task(agent: Agent, context: dict) -> Task:
+    slug = context['slug']
     return Task(
         description=(
+            f"Antes de escrever, leia output/{slug}/research/references.json. "
+            f"Adote tom de voz alinhado ao 'frankenstein' proposto. Se o Frankenstein "
+            f"sugere copy minimal/bold, use frases curtas. Se sugere institucional, "
+            f"use paragrafos. Mencione no copy 1-2 padroes observados nos competidores.\n\n"
             f"Voce e o Copywriter. Escreva a copy COMPLETA para o projeto abaixo.\n\n"
             f"Projeto: {context['card_name']}\n"
             f"Briefing: {context.get('card_desc', '(sem descricao)')}\n\n"
@@ -100,6 +105,10 @@ def create_designer_task(agent: Agent, context: dict) -> Task:
     slug = context['slug']
     return Task(
         description=(
+            f"Antes de montar o asset_manifest, leia output/{slug}/research/references.json. "
+            f"Use mood baseado no Frankenstein. Cada item do manifest deve ter prompt_pt "
+            f"que reflita pelo menos 1 padrao visual observado nas referencias (cor dominante, "
+            f"estilo de iluminacao, framing) — nao invente do zero.\n\n"
             f"Voce e o Designer. A copy do projeto '{slug}' foi salva.\n\n"
             f"1. Use obsidian_vault_search para buscar: '{slug} copy'\n"
             f"2. Leia o conteudo encontrado\n"
