@@ -346,21 +346,22 @@ def _run_pipeline(task: PlannerTask, card_name: str, card_desc: str) -> None:
             if not _set(4, "imagining", "Image Artist gerando PNGs do manifest..."):
                 return
 
-            image_artist = create_image_artist()
-            image_task   = create_image_pipeline_task(image_artist, {"slug": slug, "manifest": manifest})
-            Crew(agents=[image_artist], tasks=[image_task], verbose=False).kickoff()
-
-            png_events = [e for e in pipeline_logger.read_log(slug)
-                          if e["event"] == "asset_generated" and e.get("kind") == "png"]
-            png_paths_by_id = {}
-            for spec, ev in zip(manifest["images"], png_events):
-                png_paths_by_id[spec["id"]] = ev["path"]
-
+            # Iteracao deterministica: chama FluxImageTool diretamente para cada item
+            # do manifest, evitando correlacao fragil por zip (que falha se a geracao
+            # de qualquer imagem silencia sem emitir evento).
+            # TODO: se necessario, re-adicionar Crew de Image Artist apenas para
+            # traducao/enriquecimento do prompt_en antes da geracao.
+            flux = FluxImageTool()
             manifest_resolved = {"images": []}
             for spec in manifest["images"]:
                 item = dict(spec)
-                if spec["id"] in png_paths_by_id:
-                    item["png_path"] = png_paths_by_id[spec["id"]]
+                prompt_en = spec.get("prompt_en") or (
+                    f"{spec.get('prompt_pt', spec.get('prompt', ''))}, "
+                    "cinematic, sharp focus, 8k, detailed"
+                )
+                result = flux._run(prompt_en)
+                if not result.startswith("Erro"):
+                    item["png_path"] = result
                 manifest_resolved["images"].append(item)
             _am.write_resolved(slug, manifest_resolved)
 

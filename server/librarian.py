@@ -11,6 +11,8 @@ import re
 from datetime import date
 from pathlib import Path
 
+from . import pipeline_logger
+
 VAULT_PATH = Path(os.getenv("OBSIDIAN_VAULT_PATH", r"C:\Users\v27me\OneDrive\Desktop\Ideaverse"))
 
 
@@ -39,6 +41,11 @@ def after_copy(slug: str, copy_path: str, moc_path: str, index: bool = True) -> 
     if "## Copywriting" in text and link not in text:
         text = text.replace("## Copywriting\n", f"## Copywriting\n- {link}\n")
         full_moc.write_text(text, encoding="utf-8")
+        pipeline_logger.log_event(None, "vault_write", {
+            "path": str(full_moc.relative_to(VAULT_PATH)) if full_moc.is_relative_to(VAULT_PATH) else str(full_moc),
+            "agent_id": "bibliotecario",
+            "ace_type": "atlas",
+        })
 
     if index:
         try:
@@ -82,6 +89,11 @@ def after_dev(slug: str, project_dir: str, moc_path: str, index: bool = True) ->
     fm   = build_frontmatter("bibliotecario", "atlas", tags=["aprendizado", slug] + stack_tags)
     body = f"---\n{fm}---\n\n# {title}\n\n{content}"
     full_learnings.write_text(body, encoding="utf-8")
+    pipeline_logger.log_event(None, "vault_write", {
+        "path": str(full_learnings.relative_to(VAULT_PATH)) if full_learnings.is_relative_to(VAULT_PATH) else str(full_learnings),
+        "agent_id": "bibliotecario",
+        "ace_type": "atlas",
+    })
 
     full_moc = VAULT_PATH / moc_path
     if full_moc.exists():
@@ -90,6 +102,11 @@ def after_dev(slug: str, project_dir: str, moc_path: str, index: bool = True) ->
         if "## Dev" in text and link not in text:
             text = text.replace("## Dev\n", f"## Dev\n- {link}\n")
             full_moc.write_text(text, encoding="utf-8")
+            pipeline_logger.log_event(None, "vault_write", {
+                "path": str(full_moc.relative_to(VAULT_PATH)) if full_moc.is_relative_to(VAULT_PATH) else str(full_moc),
+                "agent_id": "bibliotecario",
+                "ace_type": "atlas",
+            })
 
     if index:
         try:
@@ -119,12 +136,23 @@ def after_deploy(
                 url_lines += f"- Netlify: {netlify_url}\n"
             text = text.replace("## Deploy\n", f"## Deploy\n{url_lines}")
             full_moc.write_text(text, encoding="utf-8")
+            pipeline_logger.log_event(None, "vault_write", {
+                "path": str(full_moc.relative_to(VAULT_PATH)) if full_moc.is_relative_to(VAULT_PATH) else str(full_moc),
+                "agent_id": "bibliotecario",
+                "ace_type": "atlas",
+            })
 
     full_effort = VAULT_PATH / effort_path
     if full_effort.exists():
         archive_dir = VAULT_PATH / "Efforts" / "Archives"
         archive_dir.mkdir(parents=True, exist_ok=True)
-        full_effort.rename(archive_dir / full_effort.name)
+        dst = archive_dir / full_effort.name
+        full_effort.rename(dst)
+        pipeline_logger.log_event(None, "vault_move", {
+            "src": str(full_effort.relative_to(VAULT_PATH)) if full_effort.is_relative_to(VAULT_PATH) else str(full_effort),
+            "dst": str(dst.relative_to(VAULT_PATH)) if dst.is_relative_to(VAULT_PATH) else str(dst),
+            "actor": "librarian.after_deploy",
+        })
     else:
         for status_dir in ["On", "Ongoing", "Simmering"]:
             candidate_dir = VAULT_PATH / "Efforts" / status_dir
@@ -133,7 +161,13 @@ def after_deploy(
                     if slug.lower() in md.stem.lower():
                         archive_dir = VAULT_PATH / "Efforts" / "Archives"
                         archive_dir.mkdir(parents=True, exist_ok=True)
-                        md.rename(archive_dir / md.name)
+                        dst = archive_dir / md.name
+                        md.rename(dst)
+                        pipeline_logger.log_event(None, "vault_move", {
+                            "src": str(md.relative_to(VAULT_PATH)) if md.is_relative_to(VAULT_PATH) else str(md),
+                            "dst": str(dst.relative_to(VAULT_PATH)) if dst.is_relative_to(VAULT_PATH) else str(dst),
+                            "actor": "librarian.after_deploy",
+                        })
                         break
 
     if index:
@@ -152,6 +186,11 @@ def after_design(slug: str, guide_path: str, manifest_str: str, moc_path: str, i
     full_manifest = VAULT_PATH / manifest_relpath
     full_manifest.parent.mkdir(parents=True, exist_ok=True)
     full_manifest.write_text(manifest_str, encoding="utf-8")
+    pipeline_logger.log_event(None, "vault_write", {
+        "path": str(full_manifest.relative_to(VAULT_PATH)) if full_manifest.is_relative_to(VAULT_PATH) else str(full_manifest),
+        "agent_id": "bibliotecario",
+        "ace_type": "atlas",
+    })
 
     full_moc = VAULT_PATH / moc_path
     if full_moc.exists():
@@ -162,6 +201,11 @@ def after_design(slug: str, guide_path: str, manifest_str: str, moc_path: str, i
             insert = f"## Design\n- {guide_link}\n- Manifest: {manifest_link}\n"
             text = text.replace("## Design\n", insert)
             full_moc.write_text(text, encoding="utf-8")
+            pipeline_logger.log_event(None, "vault_write", {
+                "path": str(full_moc.relative_to(VAULT_PATH)) if full_moc.is_relative_to(VAULT_PATH) else str(full_moc),
+                "agent_id": "bibliotecario",
+                "ace_type": "atlas",
+            })
 
     if index:
         try:
@@ -188,6 +232,11 @@ def after_assets(slug: str, resolved_manifest: dict, project_dir: str, moc_path:
     from server.vault_writer import build_frontmatter
     fm_img = build_frontmatter("image_artist", "resources", tags=["assets", slug])
     img_full.write_text(f"---\n{fm_img}---\n\n# Assets PNG: {slug}\n\n{img_content}", encoding="utf-8")
+    pipeline_logger.log_event(None, "vault_write", {
+        "path": str(img_full.relative_to(VAULT_PATH)) if img_full.is_relative_to(VAULT_PATH) else str(img_full),
+        "agent_id": "image_artist",
+        "ace_type": "resources",
+    })
 
     # 3D Artist note
     glb_items = [it for it in images if it.get("glb_path")]
@@ -201,6 +250,11 @@ def after_assets(slug: str, resolved_manifest: dict, project_dir: str, moc_path:
     glb_full.parent.mkdir(parents=True, exist_ok=True)
     fm_glb = build_frontmatter("agente_3d", "resources", tags=["assets-3d", slug])
     glb_full.write_text(f"---\n{fm_glb}---\n\n# Modelos 3D: {slug}\n\n{glb_content}", encoding="utf-8")
+    pipeline_logger.log_event(None, "vault_write", {
+        "path": str(glb_full.relative_to(VAULT_PATH)) if glb_full.is_relative_to(VAULT_PATH) else str(glb_full),
+        "agent_id": "agente_3d",
+        "ace_type": "resources",
+    })
 
     # MOC update
     full_moc = VAULT_PATH / moc_path
@@ -213,6 +267,11 @@ def after_assets(slug: str, resolved_manifest: dict, project_dir: str, moc_path:
         if "## Modelos 3D" in text and glb_link not in text:
             text = text.replace("## Modelos 3D\n", f"## Modelos 3D\n- {glb_link}\n")
         full_moc.write_text(text, encoding="utf-8")
+        pipeline_logger.log_event(None, "vault_write", {
+            "path": str(full_moc.relative_to(VAULT_PATH)) if full_moc.is_relative_to(VAULT_PATH) else str(full_moc),
+            "agent_id": "bibliotecario",
+            "ace_type": "atlas",
+        })
 
     if index:
         try:
