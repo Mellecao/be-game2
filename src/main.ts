@@ -55,13 +55,14 @@ async function bootstrap() {
     });
 
     // Wire LLM streaming chunks → whisper bubble on the active NPC
-    npcWhisperCallback = (_taskId: string, chunk: string) => {
-      for (const npc of game.npcs) {
-        if (npc.isWorking) {
-          npc.setWhisperChunk(chunk);
-          break;
-        }
-      }
+    // TODO Phase 10: usar npc.setWhisper(...) com texto acumulado via SSE
+    npcWhisperCallback = (_taskId: string, _chunk: string) => {
+      // for (const npc of game.npcs) {
+      //   if (npc.isWorking) {
+      //     npc.setWhisper(_chunk);
+      //     break;
+      //   }
+      // }
     };
 
     game.setNpcClickHandler((npc) => {

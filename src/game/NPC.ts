@@ -1,6 +1,7 @@
-import { Container, Sprite, Text, Assets, Graphics } from "pixi.js";
+import { Container, Sprite, Assets, Graphics, Texture } from "pixi.js";
 import { ASSETS } from "./constants";
 import { isoToScreen } from "./iso";
+import { BubbleStack } from "./BubbleStack";
 
 export interface AgentData {
   id: string;
@@ -13,8 +14,6 @@ export interface AgentData {
   sprite_char: number;
 }
 
-const WHISPER_MAX_CHARS = 160;
-
 export class NPC extends Container {
   public id: string;
   public displayName: string;
@@ -24,12 +23,10 @@ export class NPC extends Container {
   public worldCol: number;
   public worldRow: number;
   public isWorking = false;
+  public bubbles!: BubbleStack;
 
   private indicator!: Graphics;
   private indicatorBaseY = 0;
-  private whisperLabel!: Text;
-  private whisperBuffer = "";
-  private whisperFadeTimer = 0;
   private time = 0;
 
   private constructor(id: string, name: string, col: number, row: number) {
@@ -74,27 +71,7 @@ export class NPC extends Container {
     n.indicatorBaseY = indicator.y;
     n.addChild(indicator);
 
-    // Whisper label — shows streaming LLM text above the status indicator
-    const whisper = new Text({
-      text: "",
-      style: {
-        fontFamily: "Segoe UI",
-        fontSize: 10,
-        fontStyle: "italic",
-        fill: 0xcccccc,
-        stroke: { color: 0x000000, width: 2 },
-        wordWrap: true,
-        wordWrapWidth: 130,
-        align: "center",
-        lineHeight: 13,
-      },
-    });
-    whisper.anchor.set(0.5, 1);
-    whisper.alpha = 0.82;
-    whisper.visible = false;
-    whisper.y = indicator.y - 10;
-    n.whisperLabel = whisper;
-    n.addChild(whisper);
+    n.bubbles = new BubbleStack(n);
 
     n.eventMode = "static";
     n.cursor = "pointer";
@@ -115,35 +92,22 @@ export class NPC extends Container {
     if (!active) this.clearWhisper();
   }
 
-  /** Append an LLM token to the whisper bubble above this agent. */
-  setWhisperChunk(chunk: string): void {
-    this.whisperBuffer += chunk;
-    // Keep only the last WHISPER_MAX_CHARS characters
-    if (this.whisperBuffer.length > WHISPER_MAX_CHARS) {
-      this.whisperBuffer = this.whisperBuffer.slice(-WHISPER_MAX_CHARS);
-    }
-    // Trim to at most 4 word-wrapped lines by capping at ~80 chars from the end
-    // (word wrap at 130px / 10px italic ≈ 20 chars/line → 80 chars = ~4 lines)
-    const display = this.whisperBuffer.slice(-80);
-    this.whisperLabel.text = display;
-    this.whisperLabel.visible = true;
-    // Reposition in case text height changed
-    this.whisperLabel.y = this.indicator.y - 10;
-    this.whisperFadeTimer = 0;
+  setWhisper(text: string): void {
+    this.bubbles.setWhisper(text, this.displayName);
   }
 
   clearWhisper(): void {
-    this.whisperBuffer = "";
-    this.whisperLabel.text = "";
-    this.whisperLabel.visible = false;
-    this.whisperFadeTimer = 0;
+    this.bubbles.clearWhisper();
+  }
+
+  pushSay(text: string, avatarTexture?: Texture): void {
+    this.bubbles.pushSay(text, this.displayName, avatarTexture);
   }
 
   update(dt: number) {
     this.time += dt * 0.05;
     const floatY = this.indicatorBaseY + Math.sin(this.time) * 3;
     this.indicator.y = floatY;
-    this.whisperLabel.y = floatY - 10;
   }
 
   syncScreen() {
