@@ -218,6 +218,16 @@ AGENT_SEED = [
         "row": 4.0,
         "sprite_char": 2,
     },
+    {
+        "id": "secretario",
+        "display_name": "Secretário",
+        "role": "Atendente do Player",
+        "goal": "Responder duvidas do jogador sobre o pipeline.",
+        "backstory": "Secretario da Black Elephant. Visao completa do pipeline.",
+        "col": 0.5,
+        "row": 0.5,
+        "sprite_char": 4,
+    },
 ]
 
 # Campos que devem ser mantidos sincronizados com o código (não inclui col/row/sprite_char)
@@ -244,12 +254,13 @@ _AGENT_DISPLAY = {
     "designer":      "Designer",
     "qa":            "QA",
     "devops":        "DevOps",
-    "bibliotecario": "Bibliotecario",
+    "bibliotecario": "Bibliotecário",
     "image_artist":  "Image Artist",
     "agente_3d":     "Agente 3D",
     "researcher":    "Researcher",
     "qa_visual":     "QA Visual",
     "qa_code":       "QA Codigo",
+    "secretario":    "Secretário",
 }
 
 
