@@ -255,3 +255,29 @@ def create_designer_reviewer() -> Agent:
         verbose=False,
         allow_delegation=False,
     )
+
+
+def create_researcher() -> Agent:
+    from .web_search_tool import WebSearchTool
+    from .awwwards_tool import AwwwardsTool
+    from .browser_capture_tool import BrowserCaptureTool
+    from .vision_analysis_tool import VisionAnalysisTool
+
+    return Agent(
+        role="Pesquisador de Referencias e Concorrencia",
+        goal=(
+            "Entregar dossie com 10+ sites do segmento: 5 inspiracionais top "
+            "(awwwards/dribbble/behance) + 5 concorrentes diretos. Para cada um, "
+            "screenshots por secao (hero, mid, footer) e analise via vision LLM. "
+            "Propor 'Frankenstein': melhor hero de qual ref + melhor secao 2 de qual ref."
+        ),
+        backstory=(
+            "Voce e designer/UX research da Black Elephant. Conhece awwwards de cor. "
+            "Filtra refs por segmento (SaaS, e-commerce, agencia, fintech) e identifica "
+            "padroes de mercado. Awwwards e a referencia principal."
+        ),
+        tools=[WebSearchTool(), AwwwardsTool(), BrowserCaptureTool(), VisionAnalysisTool()],
+        llm=llm,
+        verbose=False,
+        allow_delegation=False,
+    )

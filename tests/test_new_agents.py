@@ -26,3 +26,16 @@ def test_create_bibliotecario_has_organize_and_log_tools():
     names = [t.name for t in agent.tools]
     assert "vault_organize" in names
     assert "pipeline_log" in names
+
+
+def test_create_researcher_returns_agent_with_tools():
+    from server.agents import create_researcher
+    from crewai import Agent
+    agent = create_researcher()
+    assert isinstance(agent, Agent)
+    tool_names = {t.name for t in agent.tools}
+    assert "web_search" in tool_names
+    assert "awwwards_search" in tool_names
+    assert "browser_capture" in tool_names
+    assert "vision_analyze" in tool_names
+    assert agent.role.lower().startswith("pesquisador") or "researcher" in agent.role.lower()
