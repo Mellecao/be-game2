@@ -597,3 +597,14 @@ def _whisper_buffer_clear() -> None:
     """Util pra testes."""
     with _whisper_buffer_lock:
         _whisper_buffer.clear()
+
+
+def _emit_agent_step(agent_id: str, agent_name: str, what_was_done: str,
+                     next_agent: str | None, slug: str) -> None:
+    """Chamado ao fim do step de um agente: flusha whisper, gera handoff, grava say."""
+    from . import agent_messages
+    from .handoff import generate_handoff
+
+    _whisper_buffer_flush(agent_id, slug)
+    text = generate_handoff(agent_id, agent_name, what_was_done, next_agent)
+    agent_messages.record(slug, agent_id, "say", text)
