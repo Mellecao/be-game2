@@ -349,3 +349,79 @@ def judge_artifact(artifact_type: str, content_summary: str, context: dict) -> d
             "reason": "fallback: judge LLM malformed JSON; default save=True",
             "summary": content_summary[:500],
         }
+
+
+def _summarize_research(refs: dict) -> str:
+    """Resumo curto pro judge: segmento + Frankenstein highlights."""
+    seg = refs.get("segment", "?")
+    n_insp = len(refs.get("inspirational", []))
+    n_comp = len(refs.get("competitors", []))
+    frank = refs.get("frankenstein", {})
+    frank_str = ", ".join(f"{k}={v.get('from_ref','?')}" for k, v in frank.items())
+    return f"segmento={seg}, inspiracionais={n_insp}, competidores={n_comp}, frankenstein=[{frank_str}]"
+
+
+def after_research(slug: str, references_path: str, moc_path: str, index: bool = True) -> None:
+    """Pos-research: MOC sempre, nota Atlas gated por judge_artifact."""
+    import json as _json
+
+    refs = _json.loads(Path(references_path).read_text(encoding="utf-8"))
+
+    full_moc = VAULT_PATH / moc_path
+    if full_moc.exists():
+        text = full_moc.read_text(encoding="utf-8")
+        link = f"- [Refs JSON]({references_path})"
+        if "## Pesquisa" in text and link not in text:
+            text = text.replace("## Pesquisa\n", f"## Pesquisa\n{link}\n")
+            full_moc.write_text(text, encoding="utf-8")
+            pipeline_logger.log_event(None, "vault_write", {
+                "path": str(full_moc.relative_to(VAULT_PATH)) if full_moc.is_relative_to(VAULT_PATH) else str(full_moc),
+                "agent_id": "bibliotecario",
+                "ace_type": "atlas",
+            })
+
+    summary = _summarize_research(refs)
+    decision = judge_artifact("research", summary, {"slug": slug, "segment": refs.get("segment", "")})
+
+    if not decision["save"]:
+        pipeline_logger.log_event(None, "librarian_skipped", {
+            "artifact": "research", "slug": slug, "reason": decision["reason"]
+        })
+        return
+
+    today = date.today().isoformat()
+    note_relpath = f"Atlas/Utilities/Researcher/{today}-{slug}-references.md"
+    full_note = VAULT_PATH / note_relpath
+    full_note.parent.mkdir(parents=True, exist_ok=True)
+
+    from server.vault_writer import build_frontmatter
+    fm = build_frontmatter("researcher", decision["ace_type"], tags=["pesquisa", slug] + decision["tags"])
+
+    lines = [f"---\n{fm}---\n", f"# Pesquisa: {slug}\n",
+             f"**Segmento:** {refs.get('segment','?')}\n",
+             f"**Prioridade:** {decision['priority']}\n",
+             f"**Resumo:** {decision['summary']}\n",
+             "## Inspiracionais"]
+    for r in refs.get("inspirational", []):
+        lines.append(f"- [{r.get('title','?')}]({r.get('url','')}) — `{r.get('ref_id','?')}`")
+    lines.append("\n## Competidores")
+    for r in refs.get("competitors", []):
+        lines.append(f"- [{r.get('title','?')}]({r.get('url','')}) — `{r.get('ref_id','?')}`")
+    lines.append("\n## Frankenstein")
+    for k, v in refs.get("frankenstein", {}).items():
+        lines.append(f"- **{k}**: `{v.get('from_ref','?')}` — {v.get('why','')}")
+
+    full_note.write_text("\n".join(lines), encoding="utf-8")
+
+    pipeline_logger.log_event(None, "librarian_kept", {
+        "artifact": "research", "slug": slug,
+        "priority": decision["priority"], "reason": decision["reason"],
+        "path": note_relpath,
+    })
+
+    if index:
+        try:
+            from server.obsidian_indexer import index_single_file
+            index_single_file(full_note)
+        except Exception as exc:
+            logging.getLogger(__name__).debug("after_research indexing skipped — %s", exc)
