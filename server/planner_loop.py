@@ -565,3 +565,35 @@ def _fetch_cards(api_key: str, token: str, list_id: str) -> list[dict]:
     resp   = requests.get(url, params=params, timeout=10)
     resp.raise_for_status()
     return resp.json()
+
+
+# ── Whisper buffer ────────────────────────────────────────────────────────────
+import threading as _threading_wb
+
+# Buffer de whisper por agente (acumula chunks pra flushar como 1 mensagem)
+_whisper_buffer: dict[str, dict] = {}
+_whisper_buffer_lock = _threading_wb.Lock()
+
+
+def _whisper_buffer_append(agent_id: str, slug: str, chunk: str) -> None:
+    with _whisper_buffer_lock:
+        entry = _whisper_buffer.setdefault(agent_id, {"slug": slug, "text": ""})
+        entry["slug"] = slug
+        entry["text"] += chunk
+
+
+def _whisper_buffer_flush(agent_id: str, slug: str) -> None:
+    """Flush do buffer pro DB (whisper)."""
+    from . import agent_messages
+    with _whisper_buffer_lock:
+        entry = _whisper_buffer.pop(agent_id, None)
+    if not entry or not entry["text"].strip():
+        return
+    text = entry["text"].strip()[-600:]
+    agent_messages.record(slug, agent_id, "whisper", text)
+
+
+def _whisper_buffer_clear() -> None:
+    """Util pra testes."""
+    with _whisper_buffer_lock:
+        _whisper_buffer.clear()
