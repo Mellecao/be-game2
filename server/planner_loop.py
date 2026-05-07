@@ -25,8 +25,16 @@ try:
     @crewai_event_bus.on(LLMStreamChunkEvent)
     def _on_llm_chunk(source, event: LLMStreamChunkEvent) -> None:
         task_id = getattr(_tls, "task_id", None)
+        slug = getattr(_tls, "slug", None)
+        agent_id = getattr(_tls, "current_agent_id", None)
+
         if task_id and event.chunk:
+            # mantem stream pro frontend
             event_bus.emit("llm_chunk", json.dumps({"task_id": task_id, "text": event.chunk}))
+
+            # acumula no buffer pra flush posterior
+            if slug and agent_id:
+                _whisper_buffer_append(agent_id, slug, event.chunk)
 
 except Exception:
     pass
@@ -303,6 +311,8 @@ def _run_pipeline(task: PlannerTask, card_name: str, card_desc: str) -> None:
     from .flux_tool import FluxImageTool
 
     slug        = _slugify(card_name)
+    _tls.slug = slug
+    _tls.current_agent_id = None  # CrewAI step_callback vai atualizar
     pipeline_logger.set_active_slug(slug)
     today       = datetime.date.today().isoformat()
     project_dir = rf"C:\Users\v27me\Videos\{slug}"
@@ -363,6 +373,7 @@ def _run_pipeline(task: PlannerTask, card_name: str, card_desc: str) -> None:
             })],
             process=Process.hierarchical,
             manager_llm=llm,
+            step_callback=_make_step_callback(slug, "creative"),
             verbose=False,
         )
         creative_result = str(creative_crew.kickoff())
@@ -422,6 +433,7 @@ def _run_pipeline(task: PlannerTask, card_name: str, card_desc: str) -> None:
                 })],
                 process=Process.hierarchical,
                 manager_llm=llm,
+                step_callback=_make_step_callback(slug, "qa"),
                 verbose=False,
             )
             qa_result = str(qa_crew.kickoff())
@@ -608,3 +620,65 @@ def _emit_agent_step(agent_id: str, agent_name: str, what_was_done: str,
     _whisper_buffer_flush(agent_id, slug)
     text = generate_handoff(agent_id, agent_name, what_was_done, next_agent)
     agent_messages.record(slug, agent_id, "say", text)
+
+
+# Mapa role -> agent_id (best-effort) — alinhado com server/agents.py
+_ROLE_TO_AGENT_ID = {
+    "Pesquisador de Referencias e Concorrencia": "researcher",
+    "Copywriter de Landing Pages":               "copywriter",
+    "UI/UX Designer e Diretor de Arte":          "designer",
+    "Artista Visual de IA":                      "image_artist",
+    "Artista 3D":                                 "agente_3d",
+    "UI/UX Designer Revisor":                     "designer_reviewer",
+    "Engenheiro de Qualidade (QA)":              "qa_code",
+    "QA Visual / UX Reviewer":                    "qa_visual",
+    "Desenvolvedor Full-Stack / Creative Technologist": "dev",
+}
+
+AGENT_DISPLAY_NAME = {
+    "researcher":        "Researcher",
+    "copywriter":        "Copywriter",
+    "designer":          "Designer",
+    "image_artist":      "Image Artist",
+    "agente_3d":         "3D Artist",
+    "designer_reviewer": "Designer Reviewer",
+    "qa_code":           "QA Codigo",
+    "qa_visual":         "QA Visual",
+    "dev":               "Dev",
+}
+
+_CREW_ORDER = {
+    "creative": ["researcher", "copywriter", "designer", "image_artist", "agente_3d", "designer_reviewer"],
+    "qa":       ["qa_code", "qa_visual"],
+}
+
+
+def _role_to_agent_id(role: str) -> str | None:
+    return _ROLE_TO_AGENT_ID.get(role)
+
+
+def _next_agent_in_crew(crew_kind: str, current: str | None) -> str | None:
+    order = _CREW_ORDER.get(crew_kind, [])
+    if not current or current not in order:
+        return None
+    idx = order.index(current)
+    return order[idx + 1] if idx + 1 < len(order) else None
+
+
+def _make_step_callback(slug: str, crew_kind: str):
+    """Retorna callback pro Crew step_callback."""
+    def cb(step_output):
+        try:
+            agent_role = getattr(getattr(step_output, "agent", None), "role", "")
+            agent_id = _role_to_agent_id(agent_role)
+            agent_name = AGENT_DISPLAY_NAME.get(agent_id, agent_role)
+            output_text = str(getattr(step_output, "output", step_output))[:300]
+            next_agent = _next_agent_in_crew(crew_kind, agent_id)
+            if agent_id:
+                # update tls pra o llm_chunk handler atribuir ao agente certo
+                _tls.current_agent_id = agent_id
+                _emit_agent_step(agent_id, agent_name, output_text, next_agent, slug)
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).debug("step_callback skipped: %s", e)
+    return cb
