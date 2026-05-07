@@ -39,3 +39,20 @@ def test_create_researcher_returns_agent_with_tools():
     assert "browser_capture" in tool_names
     assert "vision_analyze" in tool_names
     assert agent.role.lower().startswith("pesquisador") or "researcher" in agent.role.lower()
+
+
+def test_create_qa_code_alias_exists():
+    from server.agents import create_qa_code
+    from crewai import Agent
+    assert isinstance(create_qa_code(), Agent)
+
+
+def test_create_qa_visual_returns_agent_with_browser_tools():
+    from server.agents import create_qa_visual
+    from crewai import Agent
+    agent = create_qa_visual()
+    assert isinstance(agent, Agent)
+    tool_names = {t.name for t in agent.tools}
+    assert "server_runner" in tool_names
+    assert "browser_qa" in tool_names
+    assert "visual_diff" in tool_names

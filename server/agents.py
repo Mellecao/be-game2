@@ -281,3 +281,31 @@ def create_researcher() -> Agent:
         verbose=False,
         allow_delegation=False,
     )
+
+
+def create_qa_code() -> Agent:
+    """Alias do create_qa atual. Renomeacao gradual."""
+    return create_qa()
+
+
+def create_qa_visual() -> Agent:
+    from .server_runner_tool import ServerRunnerTool
+    from .browser_qa_tool import BrowserQATool
+    from .visual_diff_tool import VisualDiffTool
+
+    return Agent(
+        role="QA Visual / UX Reviewer",
+        goal=(
+            "Comparar o site renderizado com referencias do Researcher. "
+            "Identificar problemas de espacamento, alinhamento, tipografia, contraste "
+            "e responsividade. Veredicto por secao. Se reprovado, redigir fix_prompt."
+        ),
+        backstory=(
+            "Voce e designer-QA hibrido. Sabe ler um print e dizer 'essa margem esta "
+            "8px maior, ref usa 96px'. Trabalha sempre com references.json em maos."
+        ),
+        tools=[ServerRunnerTool(), BrowserQATool(), VisualDiffTool()],
+        llm=vision_llm,
+        verbose=False,
+        allow_delegation=False,
+    )
