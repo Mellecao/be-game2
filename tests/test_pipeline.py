@@ -19,8 +19,8 @@ def _mock_result(text: str) -> MagicMock:
     return m
 
 
-def test_pipeline_completes_all_7_steps(monkeypatch):
-    """Pipeline feliz: todos os 7 passos completam, status final = done."""
+def test_pipeline_completes_all_10_steps(monkeypatch):
+    """Pipeline feliz: todos os 10 passos completam, status final = done."""
     monkeypatch.setenv("TRELLO_DONE_LIST_ID", "list-done")
     monkeypatch.setenv("TRELLO_API_KEY", "fakekey")
     monkeypatch.setenv("TRELLO_TOKEN", "faketoken")
@@ -32,8 +32,13 @@ def test_pipeline_completes_all_7_steps(monkeypatch):
          patch("server.trello_tool.move_card_to_list"), \
          patch("server.trello_tool.update_card_description"), \
          patch("server.librarian.after_copy"), \
+         patch("server.librarian.after_design"), \
+         patch("server.librarian.after_assets"), \
          patch("server.librarian.after_dev"), \
-         patch("server.librarian.after_deploy"):
+         patch("server.librarian.after_deploy"), \
+         patch("server.pipeline_logger.set_active_slug"), \
+         patch("server.pipeline_logger.log_event"), \
+         patch("server.pipeline_logger.read_log", return_value=[]):
 
         mock_crew_cls.return_value.kickoff.return_value = _mock_result(
             "https://github.com/v27me/teste-card"
@@ -44,7 +49,7 @@ def test_pipeline_completes_all_7_steps(monkeypatch):
         _run_pipeline(task, "Teste Card", "Briefing do teste")
 
     assert task.status == "done"
-    assert task.step == 7
+    assert task.step == 10
 
 
 def test_pipeline_aborts_when_qa_reprovado_twice(monkeypatch):
@@ -59,7 +64,7 @@ def test_pipeline_aborts_when_qa_reprovado_twice(monkeypatch):
 
     def mock_kickoff():
         call_count["n"] += 1
-        # Call 5 = QA primeira passagem, call 7 = QA segunda passagem (apos revisao Dev)
+        # Call 5 = QA primeira passagem (step 8), call 7 = QA segunda passagem (apos revisao Dev)
         if call_count["n"] in (5, 7):
             return _mock_result("STATUS: REPROVADO — falta viewport meta")
         return _mock_result("OK resultado")
@@ -69,8 +74,13 @@ def test_pipeline_aborts_when_qa_reprovado_twice(monkeypatch):
          patch("server.trello_tool.move_card_to_list") as mock_move, \
          patch("server.trello_tool.update_card_description"), \
          patch("server.librarian.after_copy"), \
+         patch("server.librarian.after_design"), \
+         patch("server.librarian.after_assets"), \
          patch("server.librarian.after_dev"), \
-         patch("server.librarian.after_deploy"):
+         patch("server.librarian.after_deploy"), \
+         patch("server.pipeline_logger.set_active_slug"), \
+         patch("server.pipeline_logger.log_event"), \
+         patch("server.pipeline_logger.read_log", return_value=[]):
 
         mock_crew_cls.return_value.kickoff.side_effect = mock_kickoff
         task = _make_task()
@@ -104,8 +114,13 @@ def test_pipeline_continues_when_qa_approves_after_revision(monkeypatch):
          patch("server.trello_tool.move_card_to_list"), \
          patch("server.trello_tool.update_card_description"), \
          patch("server.librarian.after_copy"), \
+         patch("server.librarian.after_design"), \
+         patch("server.librarian.after_assets"), \
          patch("server.librarian.after_dev"), \
-         patch("server.librarian.after_deploy"):
+         patch("server.librarian.after_deploy"), \
+         patch("server.pipeline_logger.set_active_slug"), \
+         patch("server.pipeline_logger.log_event"), \
+         patch("server.pipeline_logger.read_log", return_value=[]):
 
         mock_crew_cls.return_value.kickoff.side_effect = mock_kickoff
         task = _make_task()
@@ -114,7 +129,7 @@ def test_pipeline_continues_when_qa_approves_after_revision(monkeypatch):
         _run_pipeline(task, "Teste Card", "Briefing")
 
     assert task.status == "done"
-    assert task.step == 7
+    assert task.step == 10
 
 
 def test_pipeline_respects_cancellation(monkeypatch):
@@ -138,12 +153,18 @@ def test_pipeline_respects_cancellation(monkeypatch):
     with patch("server.planner_loop.Crew") as mock_crew_cls, \
          patch("server.vault_writer.write_note", return_value=MagicMock()), \
          patch("server.librarian.after_copy"), \
+         patch("server.librarian.after_design"), \
+         patch("server.librarian.after_assets"), \
          patch("server.librarian.after_dev"), \
-         patch("server.librarian.after_deploy"):
+         patch("server.librarian.after_deploy"), \
+         patch("server.pipeline_logger.set_active_slug"), \
+         patch("server.pipeline_logger.log_event"), \
+         patch("server.pipeline_logger.read_log", return_value=[]):
 
         mock_crew_cls.return_value.kickoff.side_effect = mock_kickoff
 
         from server.planner_loop import _run_pipeline
         _run_pipeline(task, "Teste Card", "")
 
+    # curadoria roda mas restaura o status cancelled
     assert task.status == "cancelled"

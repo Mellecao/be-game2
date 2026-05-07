@@ -255,23 +255,31 @@ def _read_project_files(project_dir: str) -> str:
 
 
 def _run_pipeline(task: PlannerTask, card_name: str, card_desc: str) -> None:
-    """Pipeline completo de 7 etapas para um card do Trello."""
+    """Pipeline completo de 10 etapas + curadoria pos-pipeline."""
     _tls.task_id = task.id  # route LLM streaming tokens to this task
 
     from .agents import (
         create_copywriter, create_planner, create_designer,
-        create_developer, create_qa, create_devops,
+        create_image_artist, create_designer_reviewer, create_3d_artist,
+        create_developer, create_qa, create_devops, create_bibliotecario,
     )
     from .tasks import (
         create_planner_moc_task, create_copywriter_pipeline_task,
-        create_designer_task, create_dev_task,
+        create_designer_task,
+        create_image_pipeline_task, create_designer_review_task, create_3d_pipeline_task,
+        create_dev_task,
         create_qa_task, create_dev_revision_task, create_devops_task, create_planner_close_task,
+        create_curator_finalize_task,
     )
     from . import vault_writer
     from . import trello_tool
     from . import librarian
+    from . import asset_manifest as _am
+    from . import pipeline_logger
+    from .flux_tool import FluxImageTool
 
     slug        = _slugify(card_name)
+    pipeline_logger.set_active_slug(slug)
     today       = datetime.date.today().isoformat()
     project_dir = rf"C:\Users\v27me\Videos\{slug}"
     moc_path    = f"Atlas/Maps/{slug} MOC.md"
@@ -284,8 +292,13 @@ def _run_pipeline(task: PlannerTask, card_name: str, card_desc: str) -> None:
             task.status = status
             task.step   = step_num
             task.log    = log_msg
-        event_bus.emit("pipeline_step", f"[{step_num}/7] {log_msg}")
+        event_bus.emit("pipeline_step", f"[{step_num}/10] {log_msg}")
+        pipeline_logger.log_event(None, "step_start", {"step": step_num, "status": status})
         return True
+
+    final_status = "error"
+    design_result = ""
+    manifest_resolved = {"images": []}
 
     try:
         # ── 1. PLANEJAMENTO ──────────────────────────────────────────────────
@@ -294,7 +307,8 @@ def _run_pipeline(task: PlannerTask, card_name: str, card_desc: str) -> None:
 
         moc_content = (
             f"## Briefing\n{card_desc}\n\n"
-            f"## Copywriting\n\n## Design\n\n## Dev\n\n## Deploy\n\n## Aprendizados"
+            f"## Copywriting\n\n## Design\n\n## Imagens\n\n## Modelos 3D\n\n"
+            f"## Dev\n\n## Deploy\n\n## Curadoria\n\n## Aprendizados"
         )
         effort_content = f"## Objetivo\n{card_name}\n\n## Progresso\n- [ ] Pipeline iniciado"
         vault_writer.write_note(relative_path=moc_path,    title=f"{slug} MOC",  content=moc_content,    agent_id="planner", ace_type="atlas")
@@ -323,25 +337,121 @@ def _run_pipeline(task: PlannerTask, card_name: str, card_desc: str) -> None:
         guide_path    = f"Atlas/Utilities/Designer/{today}-{slug}-visual-guide.md"
         vault_writer.write_note(relative_path=guide_path, title=f"Guia Visual: {slug}", content=design_result, agent_id="designer", ace_type="resources", tags=["design", "guia-visual", slug])
 
-        # ── 4. DESENVOLVIMENTO ───────────────────────────────────────────────
-        if not _set(4, "developing", f"Dev construindo '{slug}' via Claude CLI..."):
+        manifest = _am.parse_manifest(design_result)
+        import json as _json
+        librarian.after_design(slug, guide_path, _json.dumps(manifest), moc_path)
+
+        # ── 4. IMAGENS ───────────────────────────────────────────────────────
+        if manifest.get("images"):
+            if not _set(4, "imagining", "Image Artist gerando PNGs do manifest..."):
+                return
+
+            image_artist = create_image_artist()
+            image_task   = create_image_pipeline_task(image_artist, {"slug": slug, "manifest": manifest})
+            Crew(agents=[image_artist], tasks=[image_task], verbose=False).kickoff()
+
+            png_events = [e for e in pipeline_logger.read_log(slug)
+                          if e["event"] == "asset_generated" and e.get("kind") == "png"]
+            png_paths_by_id = {}
+            for spec, ev in zip(manifest["images"], png_events):
+                png_paths_by_id[spec["id"]] = ev["path"]
+
+            manifest_resolved = {"images": []}
+            for spec in manifest["images"]:
+                item = dict(spec)
+                if spec["id"] in png_paths_by_id:
+                    item["png_path"] = png_paths_by_id[spec["id"]]
+                manifest_resolved["images"].append(item)
+            _am.write_resolved(slug, manifest_resolved)
+
+            # Catastrofe: nenhuma imagem gerada
+            if not any(i.get("png_path") for i in manifest_resolved["images"]):
+                with _tasks_lock:
+                    task.status = "error"
+                    task.log    = "Nenhuma imagem do manifest foi gerada — Forge offline?"
+                event_bus.emit("error", f"❌ Imagens falharam para '{card_name}'")
+                final_status = "error"
+                return
+
+            # ── 5. DESIGNER REVIEW ───────────────────────────────────────────
+            if not _set(5, "reviewing_assets", "Designer revisando os PNGs..."):
+                return
+
+            reviewer    = create_designer_reviewer()
+            review_task = create_designer_review_task(reviewer, {
+                "slug":             slug,
+                "manifest_resolved": manifest_resolved,
+                "guide_excerpt":    design_result[:3000],
+            })
+            review_raw = str(Crew(agents=[reviewer], tasks=[review_task], verbose=False).kickoff())
+
+            try:
+                review_data = _json.loads(review_raw.strip())
+                reviews     = review_data.get("reviews", [])
+            except _json.JSONDecodeError:
+                reviews = []
+
+            for r in reviews:
+                pipeline_logger.log_event(None, "asset_review", {
+                    "asset_id": r.get("id"),
+                    "verdict":  r.get("verdict"),
+                    "reason":   r.get("reason", "")[:200],
+                })
+
+            reproved = [r for r in reviews if r.get("verdict") == "REPROVADO"]
+            if reproved:
+                if not _set(5, "regen_assets", f"Regenerando {len(reproved)} imagens reprovadas..."):
+                    return
+
+                flux = FluxImageTool()
+                for r in reproved:
+                    item = next((i for i in manifest_resolved["images"] if i["id"] == r["id"]), None)
+                    if not item or not r.get("regen_prompt"):
+                        continue
+                    new_path = flux._run(r["regen_prompt"])
+                    if not new_path.startswith("Erro"):
+                        item["png_path"] = new_path
+                _am.write_resolved(slug, manifest_resolved)
+
+            # ── 6. 3D ────────────────────────────────────────────────────────
+            threed_items = [i for i in manifest_resolved.get("images", [])
+                            if i.get("convert_to_3d") and i.get("png_path")]
+            if threed_items:
+                if not _set(6, "modeling_3d", f"3D Artist gerando {len(threed_items)} GLBs..."):
+                    return
+
+                artist3d = create_3d_artist()
+                t3d      = create_3d_pipeline_task(artist3d, {"slug": slug})
+                Crew(agents=[artist3d], tasks=[t3d], verbose=False).kickoff()
+
+                glb_events   = [e for e in pipeline_logger.read_log(slug)
+                                if e["event"] == "asset_generated" and e.get("kind") == "glb"]
+                glb_by_source = {ev.get("source_image"): ev["path"] for ev in glb_events}
+                for item in manifest_resolved["images"]:
+                    if item.get("png_path") in glb_by_source:
+                        item["glb_path"] = glb_by_source[item["png_path"]]
+                _am.write_resolved(slug, manifest_resolved)
+
+            librarian.after_assets(slug, manifest_resolved, project_dir, moc_path)
+
+        # ── 7. DESENVOLVIMENTO (era 4) ───────────────────────────────────────
+        if not _set(7, "developing", f"Dev construindo '{slug}' via Claude CLI..."):
             return
 
         dev_message = (
-            f"Projeto: {card_name}\n"
-            f"Slug: {slug}\n"
-            f"Briefing: {card_desc}\n\n"
+            f"Projeto: {card_name}\nSlug: {slug}\nBriefing: {card_desc}\n\n"
             f"Copy salva em vault: {copy_path}\n"
-            f"Guia visual salvo em vault: {guide_path}\n\n"
-            f"Use obsidian_vault_search para consultar o guia visual antes de montar o prompt para o Claude CLI."
+            f"Guia visual salvo em vault: {guide_path}\n"
+            f"Manifest resolvido: output/{slug}/assets/manifest_resolved.json\n\n"
+            f"Use obsidian_vault_search para consultar o guia visual antes de montar o prompt para o Claude CLI. "
+            f"Os PNGs e GLBs estao disponiveis em output/{slug}/assets/."
         )
         dev_agent = create_developer()
         Crew(agents=[dev_agent], tasks=[create_dev_task(dev_agent, dev_message)], verbose=False).kickoff()
-
         librarian.after_dev(slug, project_dir, moc_path)
 
-        # ── 5. QA (primeira revisão) ─────────────────────────────────────────
-        if not _set(5, "reviewing", "QA revisando codigo..."):
+        # ── 8. QA (era 5) — preserva loop de revisao existente ──────────────
+        if not _set(8, "reviewing", "QA revisando codigo..."):
             return
 
         file_summary = _read_project_files(project_dir)
@@ -349,22 +459,20 @@ def _run_pipeline(task: PlannerTask, card_name: str, card_desc: str) -> None:
         qa_result    = str(Crew(agents=[qa_agent], tasks=[create_qa_task(qa_agent, {"slug": slug, "project_dir": project_dir, "file_summary": file_summary})], verbose=False).kickoff())
 
         if "STATUS: REPROVADO" in qa_result:
-            # ── Envia de volta ao Dev para corrigir ──────────────────────────
-            if not _set(5, "revision", f"QA reprovou — Dev corrigindo os problemas..."):
+            if not _set(8, "revision", f"QA reprovou — Dev corrigindo os problemas..."):
                 return
 
             print(f"[planner:{task.id[:8]}] QA REPROVOU — iniciando revisao com Dev")
             event_bus.emit("qa_failed", f"⚠️ QA reprovou '{card_name}' — Dev revisando...")
 
-            dev_rev      = create_developer()
+            dev_rev = create_developer()
             Crew(agents=[dev_rev], tasks=[create_dev_revision_task(dev_rev, {
-                "slug":         slug,
-                "project_dir":  project_dir,
-                "qa_feedback":  qa_result,
+                "slug":        slug,
+                "project_dir": project_dir,
+                "qa_feedback": qa_result,
             })], verbose=False).kickoff()
 
-            # ── QA segunda passagem ───────────────────────────────────────────
-            if not _set(5, "reviewing", "QA revisando codigo corrigido..."):
+            if not _set(8, "reviewing", "QA revisando codigo corrigido..."):
                 return
 
             file_summary2 = _read_project_files(project_dir)
@@ -377,12 +485,13 @@ def _run_pipeline(task: PlannerTask, card_name: str, card_desc: str) -> None:
                     task.log    = f"QA reprovou apos revisao: {qa_result2[:300]}"
                 print(f"[planner:{task.id[:8]}] QA REPROVOU apos revisao — abortando pipeline")
                 event_bus.emit("error", f"❌ QA reprovou '{card_name}' após revisão")
+                final_status = "error"
                 return
 
             print(f"[planner:{task.id[:8]}] QA APROVADO na segunda passagem apos revisao")
 
-        # ── 6. DEPLOY ────────────────────────────────────────────────────────
-        if not _set(6, "deploying", "DevOps fazendo push para GitHub + Netlify..."):
+        # ── 9. DEPLOY (era 6) ────────────────────────────────────────────────
+        if not _set(9, "deploying", "DevOps fazendo push para GitHub + Netlify..."):
             return
 
         devops_agent = create_devops()
@@ -393,8 +502,8 @@ def _run_pipeline(task: PlannerTask, card_name: str, card_desc: str) -> None:
         github_url  = gh_match.group(0) if gh_match else devops_raw.strip()
         netlify_url = nl_match.group(0) if nl_match else ""
 
-        # ── 7. FECHAMENTO ────────────────────────────────────────────────────
-        if not _set(7, "closing", "Planner atualizando Trello e arquivando vault..."):
+        # ── 10. FECHAMENTO (era 7) ───────────────────────────────────────────
+        if not _set(10, "closing", "Planner atualizando Trello e arquivando vault..."):
             return
 
         deploy_summary = github_url
@@ -417,11 +526,12 @@ def _run_pipeline(task: PlannerTask, card_name: str, card_desc: str) -> None:
         # ── DONE ─────────────────────────────────────────────────────────────
         with _tasks_lock:
             task.status = "done"
-            task.step   = 7
+            task.step   = 10
             task.log    = f"Pipeline concluido — {deploy_summary}"
 
         print(f"[planner:{task.id[:8]}] PIPELINE CONCLUIDO: \"{card_name}\" → {deploy_summary}")
         event_bus.emit("pipeline_done", f"'{card_name}' entregue: {deploy_summary}")
+        final_status = "done"
 
     except Exception as e:
         with _tasks_lock:
@@ -429,6 +539,54 @@ def _run_pipeline(task: PlannerTask, card_name: str, card_desc: str) -> None:
             task.log    = f"Erro na etapa {task.step}: {e}"
         print(f"[planner:{task.id[:8]}] ERRO na etapa {task.step}: {e}")
         event_bus.emit("error", f"Erro no pipeline '{card_name}': {e}")
+        final_status = "error"
+
+    finally:
+        # Curadoria pos-pipeline — sempre roda
+        # Se a task foi cancelada durante o pipeline, respeita esse status final
+        with _tasks_lock:
+            if task.status == "cancelled":
+                final_status = "cancelled"
+        try:
+            _run_curation(task, slug, moc_path, effort_path, final_status)
+        except Exception as e:
+            print(f"[planner:{task.id[:8]}] ERRO na curadoria: {e}")
+        pipeline_logger.set_active_slug(None)
+
+
+def _run_curation(task: PlannerTask, slug: str, moc_path: str, effort_path: str, final_status: str) -> None:
+    """Fase pos-pipeline: bibliotecario faz curadoria final. Sempre roda."""
+    from .agents import create_bibliotecario
+    from .tasks import create_curator_finalize_task
+    from . import pipeline_logger as _pl
+
+    with _tasks_lock:
+        previous_log = task.log
+        task.status  = "curating"
+        task.log     = f"Bibliotecario fazendo curadoria final de '{slug}'..."
+    event_bus.emit("pipeline_step", f"[C] Bibliotecario curando {slug}...")
+
+    _pl.log_event(None, "step_start", {"step": "curating", "status": "curating"})
+
+    biblio     = create_bibliotecario()
+    crew_task  = create_curator_finalize_task(biblio, {
+        "slug":         slug,
+        "moc_path":     moc_path,
+        "effort_path":  effort_path,
+        "final_status": final_status,
+        "log_path":     f"output/{slug}/.pipeline.log",
+    })
+    try:
+        Crew(agents=[biblio], tasks=[crew_task], verbose=False).kickoff()
+    except Exception as e:
+        print(f"[planner:{task.id[:8]}] curadoria abortou: {e}")
+
+    with _tasks_lock:
+        task.status = final_status
+        task.log    = f"{previous_log} | curadoria concluida"
+
+    _pl.log_event(None, "step_end", {"step": "curating"})
+    event_bus.emit("pipeline_step", f"[C] Curadoria de '{slug}' concluida")
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
