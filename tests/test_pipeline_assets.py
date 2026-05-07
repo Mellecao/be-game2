@@ -5,10 +5,10 @@ from unittest.mock import patch, MagicMock
 
 
 def test_pipeline_status_enum_includes_new_steps():
-    """Verifica que os novos status estao mapeados em planner_loop.py."""
+    """Verifica que os status do novo pipeline (Crew Criativo + curadoria) estao mapeados."""
     from server import planner_loop
     src = Path(planner_loop.__file__).read_text(encoding="utf-8")
-    for status in ["imagining", "reviewing_assets", "regen_assets", "modeling_3d", "curating"]:
+    for status in ["creative_crew", "curating"]:
         assert status in src, f"status '{status}' nao referenciado em planner_loop.py"
 
 
@@ -32,13 +32,16 @@ def test_set_helper_uses_10_step_format():
     assert "[{step_num}/7]" not in src, "[N/7] antigo deve ter sumido"
 
 
-def test_pipeline_has_10_steps_total():
-    """Verifica que o pipeline referencia etapas 1-10 e 7,8,9,10 explicitamente."""
+def test_pipeline_has_expected_step_markers():
+    """Verifica que as etapas do novo pipeline estao presentes (1, 2, 7, 8, 9, 10).
+
+    Steps 3-6 foram absorvidos pelo Crew Criativo (step 2). Step 8 (revision)
+    so eh acionado quando o Crew QA reprova durante o loop de retry.
+    """
     from server import planner_loop
     src = Path(planner_loop.__file__).read_text(encoding="utf-8")
-    # Etapas esperadas: _set(1,...), _set(2,...), ..., _set(10,...)
-    for step in range(1, 11):
-        assert f"_set({step}," in src, f"_set({step}, ...) nao encontrado — pipeline nao tem 10 etapas"
+    for step in (1, 2, 7, 8, 9, 10):
+        assert f"_set({step}," in src, f"_set({step}, ...) nao encontrado em planner_loop.py"
 
 
 def test_run_curation_function_exists():

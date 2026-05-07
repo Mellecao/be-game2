@@ -7,9 +7,10 @@ import threading
 import time
 import unicodedata
 from dataclasses import dataclass, asdict
+from pathlib import Path
 
 import requests
-from crewai import Crew
+from crewai import Crew, Process
 
 from . import event_bus
 
@@ -240,8 +241,26 @@ def _slugify(text: str) -> str:
     return _re.sub(r"-{2,}", "-", text).strip("-")
 
 
+def _parse_qa_verdict(qa_result: str) -> str:
+    """Parsea output do Crew QA — espera JSON com 'verdict' ou string contendo APROVADO."""
+    import json as _json
+    try:
+        for line in qa_result.split("\n"):
+            line = line.strip()
+            if line.startswith("{") and "verdict" in line:
+                obj = _json.loads(line)
+                v = obj.get("verdict", "").upper()
+                if v in ("APROVADO", "REPROVADO"):
+                    return v
+    except Exception:
+        pass
+    upper = qa_result.upper()
+    if "STATUS: APROVADO" in upper or '"VERDICT": "APROVADO"' in upper:
+        return "APROVADO"
+    return "REPROVADO"
+
+
 def _read_project_files(project_dir: str) -> str:
-    from pathlib import Path
     p = Path(project_dir)
     if not p.exists():
         return f"Pasta {project_dir} nao encontrada."
@@ -261,14 +280,19 @@ def _run_pipeline(task: PlannerTask, card_name: str, card_desc: str) -> None:
     from .agents import (
         create_copywriter, create_planner, create_designer,
         create_image_artist, create_designer_reviewer, create_3d_artist,
-        create_developer, create_qa, create_devops, create_bibliotecario,
+        create_researcher,
+        create_developer, create_qa, create_qa_code, create_qa_visual,
+        create_devops, create_bibliotecario,
+        llm,
     )
     from .tasks import (
         create_planner_moc_task, create_copywriter_pipeline_task,
         create_designer_task,
         create_image_pipeline_task, create_designer_review_task, create_3d_pipeline_task,
+        create_creative_brief_task,
         create_dev_task,
-        create_qa_task, create_dev_revision_task, create_devops_task, create_planner_close_task,
+        create_qa_task, create_qa_brief_task, create_dev_revision_task,
+        create_devops_task, create_planner_close_task,
         create_curator_finalize_task,
     )
     from . import vault_writer
@@ -317,123 +341,51 @@ def _run_pipeline(task: PlannerTask, card_name: str, card_desc: str) -> None:
         planner = create_planner()
         Crew(agents=[planner], tasks=[create_planner_moc_task(planner, {"card_name": card_name, "card_desc": card_desc, "slug": slug, "moc_path": moc_path, "effort_path": effort_path})], verbose=False).kickoff()
 
-        # ── 2. COPYWRITING ───────────────────────────────────────────────────
-        if not _set(2, "copywriting", "Copywriter escrevendo copy..."):
+        # ── 2. CREW CRIATIVO (substitui copy/design/imgs/review/3D) ─────────
+        # Statuses cobertos pelo Crew Criativo: copywriting, designing,
+        # imagining, reviewing_assets, regen_assets, modeling_3d.
+        if not _set(2, "creative_crew", "Crew Criativo trabalhando..."):
             return
 
-        copy_agent  = create_copywriter()
-        copy_result = str(Crew(agents=[copy_agent], tasks=[create_copywriter_pipeline_task(copy_agent, {"card_name": card_name, "card_desc": card_desc, "slug": slug})], verbose=False).kickoff())
-        copy_path   = f"Atlas/Notes/Sources/Copywriter/{today}-{slug}-copy.md"
-        vault_writer.write_note(relative_path=copy_path, title=f"{slug} — Copy", content=copy_result, agent_id="copywriter", ace_type="sources", tags=["copy", slug])
+        researcher        = create_researcher()
+        copy_agent        = create_copywriter()
+        designer          = create_designer()
+        image_artist      = create_image_artist()
+        artist_3d         = create_3d_artist()
+        designer_reviewer = create_designer_reviewer()
 
-        librarian.after_copy(slug, copy_path, moc_path)
+        creative_crew = Crew(
+            agents=[researcher, copy_agent, designer, image_artist, artist_3d, designer_reviewer],
+            tasks=[create_creative_brief_task({
+                "slug":      slug,
+                "card_name": card_name,
+                "card_desc": card_desc,
+            })],
+            process=Process.hierarchical,
+            manager_llm=llm,
+            verbose=False,
+        )
+        creative_result = str(creative_crew.kickoff())
 
-        # ── 3. DESIGN ────────────────────────────────────────────────────────
-        if not _set(3, "designing", "Designer criando guia visual..."):
-            return
+        # Hooks do bibliotecario apos crew terminar.
+        # Os hooks after_copy/after_design/after_assets serao disparados pelos
+        # proprios agentes/tools no futuro; por ora rodamos after_research +
+        # after_assets aqui (ambos baseados em arquivos gravados em disco).
+        references_path = f"output/{slug}/research/references.json"
+        if Path(references_path).exists():
+            librarian.after_research(slug, references_path, moc_path)
 
-        designer      = create_designer()
-        design_result = str(Crew(agents=[designer], tasks=[create_designer_task(designer, {"slug": slug, "copy_path": copy_path})], verbose=False).kickoff())
-        guide_path    = f"Atlas/Utilities/Designer/{today}-{slug}-visual-guide.md"
-        vault_writer.write_note(relative_path=guide_path, title=f"Guia Visual: {slug}", content=design_result, agent_id="designer", ace_type="resources", tags=["design", "guia-visual", slug])
-
-        manifest = _am.parse_manifest(design_result)
-        import json as _json
-        librarian.after_design(slug, guide_path, _json.dumps(manifest), moc_path)
-
-        # ── 4. IMAGENS ───────────────────────────────────────────────────────
-        if manifest.get("images"):
-            if not _set(4, "imagining", "Image Artist gerando PNGs do manifest..."):
-                return
-
-            # Iteracao deterministica: chama FluxImageTool diretamente para cada item
-            # do manifest, evitando correlacao fragil por zip (que falha se a geracao
-            # de qualquer imagem silencia sem emitir evento).
-            # TODO: se necessario, re-adicionar Crew de Image Artist apenas para
-            # traducao/enriquecimento do prompt_en antes da geracao.
-            flux = FluxImageTool()
-            manifest_resolved = {"images": []}
-            for spec in manifest["images"]:
-                item = dict(spec)
-                prompt_en = spec.get("prompt_en") or (
-                    f"{spec.get('prompt_pt', spec.get('prompt', ''))}, "
-                    "cinematic, sharp focus, 8k, detailed"
-                )
-                result = flux._run(prompt_en)
-                if not result.startswith("Erro"):
-                    item["png_path"] = result
-                manifest_resolved["images"].append(item)
-            _am.write_resolved(slug, manifest_resolved)
-
-            # Catastrofe: nenhuma imagem gerada
-            if not any(i.get("png_path") for i in manifest_resolved["images"]):
-                with _tasks_lock:
-                    task.status = "error"
-                    task.log    = "Nenhuma imagem do manifest foi gerada — Forge offline?"
-                event_bus.emit("error", f"❌ Imagens falharam para '{card_name}'")
-                final_status = "error"
-                return
-
-            # ── 5. DESIGNER REVIEW ───────────────────────────────────────────
-            if not _set(5, "reviewing_assets", "Designer revisando os PNGs..."):
-                return
-
-            reviewer    = create_designer_reviewer()
-            review_task = create_designer_review_task(reviewer, {
-                "slug":             slug,
-                "manifest_resolved": manifest_resolved,
-                "guide_excerpt":    design_result[:3000],
-            })
-            review_raw = str(Crew(agents=[reviewer], tasks=[review_task], verbose=False).kickoff())
-
+        manifest_resolved_path = Path(f"output/{slug}/assets/manifest_resolved.json")
+        if manifest_resolved_path.exists():
             try:
-                review_data = _json.loads(review_raw.strip())
-                reviews     = review_data.get("reviews", [])
-            except _json.JSONDecodeError:
-                reviews = []
-
-            for r in reviews:
-                pipeline_logger.log_event(None, "asset_review", {
-                    "asset_id": r.get("id"),
-                    "verdict":  r.get("verdict"),
-                    "reason":   r.get("reason", "")[:200],
-                })
-
-            reproved = [r for r in reviews if r.get("verdict") == "REPROVADO"]
-            if reproved:
-                if not _set(5, "regen_assets", f"Regenerando {len(reproved)} imagens reprovadas..."):
-                    return
-
-                flux = FluxImageTool()
-                for r in reproved:
-                    item = next((i for i in manifest_resolved["images"] if i["id"] == r["id"]), None)
-                    if not item or not r.get("regen_prompt"):
-                        continue
-                    new_path = flux._run(r["regen_prompt"])
-                    if not new_path.startswith("Erro"):
-                        item["png_path"] = new_path
-                _am.write_resolved(slug, manifest_resolved)
-
-            # ── 6. 3D ────────────────────────────────────────────────────────
-            threed_items = [i for i in manifest_resolved.get("images", [])
-                            if i.get("convert_to_3d") and i.get("png_path")]
-            if threed_items:
-                if not _set(6, "modeling_3d", f"3D Artist gerando {len(threed_items)} GLBs..."):
-                    return
-
-                artist3d = create_3d_artist()
-                t3d      = create_3d_pipeline_task(artist3d, {"slug": slug})
-                Crew(agents=[artist3d], tasks=[t3d], verbose=False).kickoff()
-
-                glb_events   = [e for e in pipeline_logger.read_log(slug)
-                                if e["event"] == "asset_generated" and e.get("kind") == "glb"]
-                glb_by_source = {ev.get("source_image"): ev["path"] for ev in glb_events}
-                for item in manifest_resolved["images"]:
-                    if item.get("png_path") in glb_by_source:
-                        item["glb_path"] = glb_by_source[item["png_path"]]
-                _am.write_resolved(slug, manifest_resolved)
-
+                manifest_resolved = json.loads(manifest_resolved_path.read_text(encoding="utf-8"))
+            except Exception:
+                manifest_resolved = {"images": []}
             librarian.after_assets(slug, manifest_resolved, project_dir, moc_path)
+
+        # Recuperar paths de copy/guia para compor mensagem do Dev (best-effort).
+        copy_path  = f"Atlas/Notes/Sources/Copywriter/{today}-{slug}-copy.md"
+        guide_path = f"Atlas/Utilities/Designer/{today}-{slug}-visual-guide.md"
 
         # ── 7. DESENVOLVIMENTO (era 4) ───────────────────────────────────────
         if not _set(7, "developing", f"Dev construindo '{slug}' via Claude CLI..."):
