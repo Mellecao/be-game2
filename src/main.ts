@@ -11,6 +11,9 @@ import { MultiplayerService } from "./multiplayer/MultiplayerService";
 import { AgentToast, connectEventStream } from "./ui/AgentToast";
 import { TasksPanel } from "./ui/TasksPanel";
 import { AgentsPanel } from "./ui/AgentsPanel";
+import { ChatWindowManager } from "./ui/ChatWindowManager";
+import { PlayerChatInput } from "./ui/PlayerChatInput";
+import type { NPC } from "./game/NPC";
 
 async function bootstrap() {
   const identity = await NicknameModal.getOrPrompt();
@@ -18,11 +21,9 @@ async function bootstrap() {
   const tasksPanel = new TasksPanel();
   new AgentsPanel();
 
-  // Whisper chunks are routed to NPCs after game.init (wired below)
-  let npcWhisperCallback: ((taskId: string, chunk: string) => void) | undefined;
-  connectEventStream(toast, tasksPanel, (taskId, chunk) => {
-    npcWhisperCallback?.(taskId, chunk);
-  });
+  // llm_chunk callback é mantido por compatibilidade, mas o whisper persistido
+  // agora chega via SSE 'agent_message' e é roteado direto pelo AgentToast.
+  connectEventStream(toast, tasksPanel);
 
   const app = new Application();
   await app.init({
@@ -54,16 +55,53 @@ async function bootstrap() {
       }
     });
 
-    // Wire LLM streaming chunks → whisper bubble on the active NPC
-    // TODO Phase 10: usar npc.setWhisper(...) com texto acumulado via SSE
-    npcWhisperCallback = (_taskId: string, _chunk: string) => {
-      // for (const npc of game.npcs) {
-      //   if (npc.isWorking) {
-      //     npc.setWhisper(_chunk);
-      //     break;
-      //   }
-      // }
-    };
+    // Build NPC registry (id → NPC) and wire ChatWindowManager + AgentToast routing.
+    // Whisper agora vem via SSE agent_message (roteado pelo AgentToast).
+    const npcRegistry: Record<string, NPC> = {};
+    for (const npc of game.npcs) npcRegistry[npc.id] = npc;
+
+    const chatWindowManager = new ChatWindowManager();
+    toast.setChatWindowManager(chatWindowManager);
+    toast.setNpcRegistry(npcRegistry);
+
+    // Player chat input (T key toggle) → POST /api/chat/secretario
+    const playerInput = new PlayerChatInput({
+      onSubmit: async (text: string) => {
+        // 1. Bubble player imediato (Phase 11 vai adicionar Player.pushSay)
+        if (game.player && typeof (game.player as any).pushSay === "function") {
+          (game.player as any).pushSay(text);
+        }
+
+        // 2. Whisper "..." no Secretário enquanto aguarda resposta
+        const secretarioNpc = npcRegistry["secretario"];
+        secretarioNpc?.setWhisper("...");
+
+        // 3. POST endpoint — SSE 'agent_message' tipo 'reply' do Secretário
+        // vai trigger pushSay automaticamente via AgentToast.routeAgentMessage
+        try {
+          await fetch("/api/chat/secretario", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ message: text }),
+          });
+        } catch (err) {
+          console.error("chat secretario failed", err);
+          secretarioNpc?.setWhisper("(erro de conexão)");
+          setTimeout(() => secretarioNpc?.clearWhisper(), 3000);
+        }
+      },
+    });
+
+    // Listener global: T toggle (ignora se outro input já tem foco)
+    window.addEventListener("keydown", (e) => {
+      if (e.key !== "t" && e.key !== "T") return;
+      const active = document.activeElement;
+      if (active?.tagName === "INPUT" || active?.tagName === "TEXTAREA") {
+        if (!playerInput.hasFocus()) return;
+      }
+      e.preventDefault();
+      playerInput.toggle();
+    });
 
     game.setNpcClickHandler((npc) => {
       chat.open({
