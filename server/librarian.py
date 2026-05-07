@@ -425,3 +425,80 @@ def after_research(slug: str, references_path: str, moc_path: str, index: bool =
             index_single_file(full_note)
         except Exception as exc:
             logging.getLogger(__name__).debug("after_research indexing skipped — %s", exc)
+
+
+def _summarize_qa_visual(report: list) -> str:
+    if not report:
+        return "report vazio"
+    n = len(report)
+    n_repr = sum(1 for r in report if r.get("verdict") == "REPROVADO")
+    issues_top = []
+    for r in report:
+        for i in r.get("issues", [])[:1]:
+            issues_top.append(f"[{r.get('section','?')}] {i}")
+        if len(issues_top) >= 3:
+            break
+    return f"secoes={n}, reprovadas={n_repr}, top_issues={'; '.join(issues_top)}"
+
+
+def after_qa_visual(slug: str, report_path: str, screenshots_dir: str,
+                    moc_path: str, index: bool = True) -> None:
+    """Pos-QA-visual: MOC sempre, nota Atlas gated por judge_artifact."""
+    import json as _json
+
+    report = _json.loads(Path(report_path).read_text(encoding="utf-8"))
+
+    full_moc = VAULT_PATH / moc_path
+    if full_moc.exists():
+        text = full_moc.read_text(encoding="utf-8")
+        link = f"- [Report QA visual]({report_path})"
+        if "## QA Visual" in text and link not in text:
+            text = text.replace("## QA Visual\n", f"## QA Visual\n{link}\n")
+            full_moc.write_text(text, encoding="utf-8")
+            pipeline_logger.log_event(None, "vault_write", {
+                "path": str(full_moc.relative_to(VAULT_PATH)) if full_moc.is_relative_to(VAULT_PATH) else str(full_moc),
+                "agent_id": "bibliotecario",
+                "ace_type": "atlas",
+            })
+
+    summary = _summarize_qa_visual(report)
+    decision = judge_artifact("qa_visual", summary, {"slug": slug})
+
+    if not decision["save"]:
+        pipeline_logger.log_event(None, "librarian_skipped", {
+            "artifact": "qa_visual", "slug": slug, "reason": decision["reason"]
+        })
+        return
+
+    today = date.today().isoformat()
+    note_relpath = f"Atlas/Utilities/QA-Visual/{today}-{slug}-review.md"
+    full_note = VAULT_PATH / note_relpath
+    full_note.parent.mkdir(parents=True, exist_ok=True)
+
+    from server.vault_writer import build_frontmatter
+    fm = build_frontmatter("qa_visual", decision["ace_type"], tags=["qa-visual", slug] + decision["tags"])
+
+    lines = [f"---\n{fm}---\n", f"# QA Visual: {slug}\n",
+             f"**Prioridade:** {decision['priority']}\n",
+             f"**Resumo:** {decision['summary']}\n",
+             f"**Screenshots:** {screenshots_dir}\n",
+             "## Veredicto por secao",
+             "| Secao | Veredicto | Issues |", "|---|---|---|"]
+    for r in report:
+        issues = "<br>".join(r.get("issues", []))
+        lines.append(f"| {r.get('section','?')} | {r.get('verdict','?')} | {issues} |")
+
+    full_note.write_text("\n".join(lines), encoding="utf-8")
+
+    pipeline_logger.log_event(None, "librarian_kept", {
+        "artifact": "qa_visual", "slug": slug,
+        "priority": decision["priority"], "reason": decision["reason"],
+        "path": note_relpath,
+    })
+
+    if index:
+        try:
+            from server.obsidian_indexer import index_single_file
+            index_single_file(full_note)
+        except Exception as exc:
+            logging.getLogger(__name__).debug("after_qa_visual indexing skipped — %s", exc)
