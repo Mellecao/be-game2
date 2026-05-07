@@ -2,6 +2,7 @@ import { Container, Sprite, Texture, Assets, Text, TextStyle } from "pixi.js";
 import { ASSETS, PLAYER_SPEED } from "./constants";
 import { clampToRoom, isoToScreen } from "./iso";
 import { CollisionMap } from "./CollisionMap";
+import { BubbleStack } from "./BubbleStack";
 
 type Dir = "front" | "back" | "left" | "right";
 type DirKey = "front" | "back" | "side";
@@ -36,6 +37,21 @@ export class Player extends Container {
 
   private keys: Record<string, boolean> = {};
   collisionMap: CollisionMap | null = null;
+
+  bubbles!: BubbleStack;
+  private avatarTexture: Texture | undefined = undefined;
+
+  pushSay(text: string): void {
+    this.bubbles.pushPlayer(text, this.avatarTexture);
+  }
+
+  setWhisper(text: string): void {
+    this.bubbles.setWhisper(text);
+  }
+
+  clearWhisper(): void {
+    this.bubbles.clearWhisper();
+  }
 
   static async load(): Promise<Player> {
     const p = new Player();
@@ -83,6 +99,9 @@ export class Player extends Container {
     p.nameLabel.y = -(p.sprite.height + 6)
     p.addChild(p.nameLabel)
 
+    p.avatarTexture = p.idleTextures.front[0];
+    p.bubbles = new BubbleStack(p);
+
     p.bindInput();
     p.syncScreen();
     return p;
@@ -93,8 +112,20 @@ export class Player extends Container {
   }
 
   private bindInput() {
-    window.addEventListener("keydown", (e) => { this.keys[e.key.toLowerCase()] = true; });
-    window.addEventListener("keyup",   (e) => { this.keys[e.key.toLowerCase()] = false; });
+    window.addEventListener("keydown", (e) => {
+      const active = document.activeElement;
+      if (active?.tagName === "INPUT" || active?.tagName === "TEXTAREA") return;
+      this.keys[e.key.toLowerCase()] = true;
+    });
+    window.addEventListener("keyup", (e) => {
+      const active = document.activeElement;
+      if (active?.tagName === "INPUT" || active?.tagName === "TEXTAREA") {
+        // Still clear the key so a held key doesn't stay "stuck" when input gets focus
+        this.keys[e.key.toLowerCase()] = false;
+        return;
+      }
+      this.keys[e.key.toLowerCase()] = false;
+    });
   }
 
   update(dt: number) {
