@@ -81,3 +81,38 @@ class FluxImageTool(BaseTool):
             "prompt": prompt[:200],
         })
         return abs_path
+
+
+class GenerateAllImagesTool(BaseTool):
+    name: str = "generate_all_images"
+    description: str = (
+        "Gera TODAS as imagens de um manifest sequencialmente (uma por vez). "
+        "Argumentos: manifest_path (path do manifest.json com lista 'images') e "
+        "output_path (path onde salvar manifest_resolved.json). Use APENAS uma "
+        "vez por projeto - itera internamente."
+    )
+
+    def _run(self, manifest_path: str, output_path: str) -> str:
+        import json as _json
+
+        manifest = _json.loads(Path(manifest_path).read_text(encoding="utf-8"))
+        flux = FluxImageTool()
+        resolved = {"images": []}
+
+        for spec in manifest.get("images", []):
+            item = dict(spec)
+            prompt_en = spec.get("prompt_en") or (
+                f"{spec.get('prompt_pt', spec.get('prompt', ''))}, "
+                "cinematic, sharp focus, 8k, detailed"
+            )
+            result = flux._generate(prompt_en)
+            if not str(result).startswith("Erro"):
+                item["png_path"] = result
+            resolved["images"].append(item)
+
+        Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+        Path(output_path).write_text(_json.dumps(resolved, ensure_ascii=False, indent=2), encoding="utf-8")
+
+        n_total = len(resolved["images"])
+        n_ok = sum(1 for i in resolved["images"] if i.get("png_path"))
+        return f"Geradas {n_ok}/{n_total} imagens. manifest_resolved salvo em {output_path}."

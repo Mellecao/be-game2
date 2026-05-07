@@ -30,3 +30,39 @@ def test_flux_tool_handles_api_error(tmp_path):
     ):
         result = tool._run("anything")
     assert "Erro ao chamar API do Forge" in result
+
+
+import json
+from pathlib import Path
+
+
+def test_generate_all_images_iterates_manifest(tmp_path, monkeypatch):
+    from server import flux_tool
+
+    manifest = {"images": [
+        {"id": "hero", "prompt_pt": "hero text", "prompt_en": "hero",
+         "purpose": "p", "width": 1024, "height": 1024, "convert_to_3d": False},
+        {"id": "feat", "prompt_pt": "feat", "prompt_en": "feat eng",
+         "purpose": "p", "width": 1024, "height": 1024, "convert_to_3d": False},
+    ]}
+    manifest_path = tmp_path / "manifest.json"
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+    out_path = tmp_path / "manifest_resolved.json"
+
+    calls = []
+    def fake_run(self, prompt):
+        calls.append(prompt)
+        png = tmp_path / f"{len(calls)}.png"
+        png.write_bytes(b"\x89PNG")
+        return str(png)
+
+    monkeypatch.setattr(flux_tool.FluxImageTool, "_generate", fake_run)
+
+    tool = flux_tool.GenerateAllImagesTool()
+    result = tool._run(manifest_path=str(manifest_path), output_path=str(out_path))
+
+    assert len(calls) == 2
+    resolved = json.loads(out_path.read_text(encoding="utf-8"))
+    assert resolved["images"][0]["png_path"].endswith(".png")
+    assert "Geradas" in result or "2" in result
