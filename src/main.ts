@@ -1,11 +1,9 @@
 import { Application } from "pixi.js";
 import { Game } from "./game/Game";
-import { ChatPanel } from "./ui/ChatPanel";
 import { BuildingPanel } from "./ui/BuildingPanel";
 import { InventoryPanel } from "./ui/InventoryPanel";
 import { AgentPanel } from "./ui/AgentPanel";
 import { AgentConfigModal } from "./ui/AgentConfigModal";
-import { ASSETS } from "./game/constants";
 import { NicknameModal } from "./ui/NicknameModal";
 import { MultiplayerService } from "./multiplayer/MultiplayerService";
 import { AgentToast, connectEventStream } from "./ui/AgentToast";
@@ -45,8 +43,6 @@ async function bootstrap() {
     await game.init(container, mp);
     game.player.setName(identity.name);
     window.addEventListener('beforeunload', () => mp.disconnect());
-
-    const chat = new ChatPanel();
 
     // Wire task status → NPC indicator color (yellow idle, green working)
     tasksPanel.setAgentWorkingCallback((activeIds) => {
@@ -104,11 +100,7 @@ async function bootstrap() {
     });
 
     game.setNpcClickHandler((npc) => {
-      chat.open({
-        id: npc.id,
-        name: npc.displayName,
-        portraitUrl: ASSETS.portraitNpc,
-      });
+      chatWindowManager.open(npc.id);
     });
 
     const inventory = new InventoryPanel(
