@@ -321,3 +321,32 @@ def create_curator_finalize_task(agent: Agent, context: dict) -> Task:
         ),
         agent=agent,
     )
+
+
+def create_creative_brief_task(context: dict) -> Task:
+    slug = context["slug"]
+    card_name = context.get("card_name", "")
+    card_desc = context.get("card_desc", "")
+    return Task(
+        description=(
+            f"Voce e o Diretor Criativo. Entregue bundle pronto pro Dev do projeto '{slug}'.\n\n"
+            f"Card: {card_name}\nBriefing: {card_desc}\n\n"
+            f"Sequencia sugerida (ajuste se necessario):\n"
+            f"1. Researcher monta dossie (5 refs awwwards/dribbble/behance + 5 competidores) "
+            f"   e salva em output/{slug}/research/references.json com campo 'frankenstein'.\n"
+            f"2. Copywriter le references.json e escreve copy alinhado ao tom do Frankenstein. "
+            f"   Salva em vault.\n"
+            f"3. Designer le references.json + copy, gera asset_manifest com mood baseado nas refs. "
+            f"   Salva guia visual em vault.\n"
+            f"4. Image Artist chama generate_all_images uma unica vez (passa o manifest path).\n"
+            f"5. 3D Artist chama generate_all_glbs se houver itens com convert_to_3d=true.\n"
+            f"6. Designer Reviewer aprova ou solicita regen. Pode haver 1 retry maximo.\n\n"
+            f"Reordene se algum passo bloquear. Conclua quando manifest_resolved.json estiver "
+            f"completo e o review aprovar."
+        ),
+        expected_output=(
+            f"JSON: {{\"status\": \"ready\", "
+            f"\"manifest_resolved_path\": \"output/{slug}/assets/manifest_resolved.json\", "
+            f"\"references_path\": \"output/{slug}/research/references.json\"}}"
+        ),
+    )

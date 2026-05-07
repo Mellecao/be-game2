@@ -41,3 +41,16 @@ def test_curator_finalize_task_includes_log_path():
     })
     assert "pipeline_log" in t.description
     assert "ACE" in t.description or "Atlas" in t.description
+
+
+def test_create_creative_brief_task_includes_slug_and_briefing():
+    from server.tasks import create_creative_brief_task
+    from crewai import Task
+    task = create_creative_brief_task({
+        "slug": "fintech-x",
+        "card_name": "Fintech X Landing",
+        "card_desc": "Landing pra produto B2B SaaS fintech.",
+    })
+    assert isinstance(task, Task)
+    assert "fintech-x" in task.description
+    assert "Fintech X Landing" in task.description or "Landing pra produto B2B" in task.description
