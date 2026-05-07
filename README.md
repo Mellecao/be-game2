@@ -19,3 +19,22 @@ Pré-requisitos: Forge rodando (`http://127.0.0.1:7860`), Hunyuan3D rodando (`ht
    - `Atlas/Utilities/QA-Visual/...` — idem
 6. Conferir Qdrant:
    - Buscar `obsidian_vault_search "padrão hero saas"` deve retornar refs do projeto se foram indexadas.
+
+## Smoke test manual: chat bubbles + Secretário
+
+Pré-requisitos: api server + frontend rodando.
+
+1. `python -m uvicorn server.api:app --reload --port 8000`
+2. `npm run dev` (em outro terminal)
+3. Abrir `http://localhost:5173` no browser
+
+**Verificações:**
+- Secretário (canto esquerdo) e Bibliotecário (canto direito) aparecem como NPCs
+- Apertar **T** → input abre bottom-left
+- Digitar "como ta o pipeline?" + Enter → bubble player aparece acima do Player, whisper "..." aparece acima do Secretário, depois bubble dourado com a resposta
+- W/A/S/D não move o Player enquanto input está aberto
+- **Esc** fecha input sem enviar
+- Click no Bibliotecário → abre janela de chat com input
+- Click em outro agente (ex: Researcher) → abre nova janela paralela, **sem input** (read-only)
+- Drag das janelas funciona; close (×) salva posição em localStorage
+- Subir um card real no Trello → ver whisper aparecer enquanto agente trabalha, depois bubble dourado com handoff ("Pesquisa pronta, passando pro Copy")
