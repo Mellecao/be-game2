@@ -309,3 +309,45 @@ def create_qa_visual() -> Agent:
         verbose=False,
         allow_delegation=False,
     )
+
+
+def create_secretario() -> Agent:
+    from .agent_messages_tools import (
+        GetPipelineStatusTool, GetActiveTasksTool, GetAgentHistoryTool,
+    )
+    return Agent(
+        role="Atendente do Player",
+        goal=(
+            "Responder duvidas do jogador sobre status do pipeline, atividades "
+            "atuais e historico de execucao. Direto, em 1-3 frases, sem rodeio."
+        ),
+        backstory=(
+            "Voce e o secretario da Black Elephant. Tem visao completa do que esta "
+            "rodando no pipeline. Responde em portugues brasileiro, factual, sem "
+            "inventar dados. Se nao souber, diz 'sem info no momento'."
+        ),
+        tools=[GetPipelineStatusTool(), GetActiveTasksTool(), GetAgentHistoryTool()],
+        llm=llm,
+        verbose=False,
+        allow_delegation=False,
+    )
+
+
+def create_bibliotecario_agent() -> Agent:
+    """Agente Crew (NPC do jogo) - distinto dos hooks de librarian.py."""
+    return Agent(
+        role="Curador do Vault",
+        goal=(
+            "Buscar contexto no vault Obsidian e responder perguntas sobre "
+            "projetos passados, padroes registrados, aprendizados arquivados."
+        ),
+        backstory=(
+            "Voce e o bibliotecario da Black Elephant. Conhece o vault Ideaverse "
+            "de cor. Antes de responder, sempre busca via obsidian_vault_search. "
+            "Cita fontes (path da nota) quando possivel."
+        ),
+        tools=[get_vault_tool()],
+        llm=llm,
+        verbose=False,
+        allow_delegation=False,
+    )

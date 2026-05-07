@@ -56,3 +56,24 @@ def test_create_qa_visual_returns_agent_with_browser_tools():
     assert "server_runner" in tool_names
     assert "browser_qa" in tool_names
     assert "visual_diff" in tool_names
+
+
+def test_create_secretario_has_3_tools():
+    from server.agents import create_secretario
+    from crewai import Agent
+    agent = create_secretario()
+    assert isinstance(agent, Agent)
+    tool_names = {t.name for t in agent.tools}
+    assert "get_pipeline_status" in tool_names
+    assert "get_active_tasks" in tool_names
+    assert "get_agent_history" in tool_names
+    assert agent.allow_delegation is False
+
+
+def test_create_bibliotecario_agent_has_vault_tools():
+    from server.agents import create_bibliotecario_agent
+    from crewai import Agent
+    agent = create_bibliotecario_agent()
+    assert isinstance(agent, Agent)
+    tool_names = {t.name for t in agent.tools}
+    assert any("vault" in n for n in tool_names) or any("obsidian" in n for n in tool_names)
