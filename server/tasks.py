@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+
 from crewai import Task, Agent
 
 
@@ -103,23 +105,29 @@ def create_designer_task(agent: Agent, context: dict) -> Task:
             f"2. Leia o conteudo encontrado\n"
             f"3. Crie um guia visual completo em Markdown:\n\n"
             f"# Guia Visual: {slug}\n\n"
-            f"## Paleta de Cores\n"
-            f"- Primaria: #XXXXXX (nome)\n- Secundaria: #XXXXXX\n"
+            f"## Paleta de Cores\n- Primaria: #XXXXXX (nome)\n- Secundaria: #XXXXXX\n"
             f"- Accent: #XXXXXX\n- Background: #XXXXXX\n- Texto: #XXXXXX\n\n"
-            f"## Tipografia\n"
-            f"- Heading: [Google Font] — tamanhos h1/h2/h3\n"
-            f"- Body: [Google Font] — tamanho padrao\n\n"
-            f"## Mood & Estetica\n"
-            f"- Palavras-chave: (ex: dark, imersivo, organico, minimalista)\n\n"
-            f"## Layout por Secao\n"
-            f"- Hero: (descricao layout)\n- Features: ...\n- CTA: ...\n\n"
-            f"## Animacoes GSAP Sugeridas\n"
-            f"- (lista de animacoes com propriedades)\n\n"
-            f"## Assets Necessarios\n"
-            f"- (imagens, icones, videos)\n\n"
-            f"Retorne APENAS o Markdown do guia, comecando com '# Guia Visual: {slug}'."
+            f"## Tipografia\n- Heading: [Google Font]\n- Body: [Google Font]\n\n"
+            f"## Mood & Estetica\n- Palavras-chave: ...\n\n"
+            f"## Layout por Secao\n- Hero: ...\n- Features: ...\n- CTA: ...\n\n"
+            f"## Animacoes GSAP Sugeridas\n- ...\n\n"
+            f"## Assets Necessarios\n- ...\n\n"
+            f"4. Ao FINAL do markdown, anexe um bloco asset_manifest com este formato EXATO:\n\n"
+            f"```asset_manifest\n"
+            f"{{\n"
+            f"  \"images\": [\n"
+            f"    {{\"id\": \"hero\", \"prompt_pt\": \"...\", \"purpose\": \"...\", "
+            f"\"width\": 1920, \"height\": 1080, \"convert_to_3d\": false}},\n"
+            f"    {{\"id\": \"logo\", \"prompt_pt\": \"...\", \"purpose\": \"...\", "
+            f"\"width\": 1024, \"height\": 1024, \"convert_to_3d\": true}}\n"
+            f"  ]\n"
+            f"}}\n"
+            f"```\n\n"
+            f"O bloco asset_manifest e OBRIGATORIO. Liste de 2 a 5 imagens. "
+            f"Marque convert_to_3d=true apenas para itens que fazem sentido como modelo 3D "
+            f"(logo, mascote, produto). Backgrounds e fotos fica false."
         ),
-        expected_output=f"Guia visual completo em Markdown comecando com '# Guia Visual: {slug}'",
+        expected_output=f"Guia visual completo em Markdown comecando com '# Guia Visual: {slug}' incluindo bloco asset_manifest.",
         agent=agent,
     )
 
@@ -206,5 +214,110 @@ def create_planner_close_task(agent: Agent, context: dict) -> Task:
             f"(GitHub e Netlify) e que o card no Trello foi movido para Concluido."
         ),
         expected_output="Confirmacao da entrega em 2-3 frases com as URLs do GitHub e Netlify.",
+        agent=agent,
+    )
+
+
+def create_image_pipeline_task(agent: Agent, context: dict) -> Task:
+    slug = context["slug"]
+    manifest_json = json.dumps(context["manifest"], ensure_ascii=False, indent=2)
+    return Task(
+        description=(
+            f"Voce e o Image Artist. Gere as imagens do projeto '{slug}'.\n\n"
+            f"Manifest recebido:\n{manifest_json}\n\n"
+            f"Para CADA item em images:\n"
+            f"1. Reescreva o prompt_pt como um prompt detalhado em INGLES (>= 30 palavras: "
+            f"   assunto, estilo, iluminacao, composicao, qualidade tipo 'cinematic', '8k', 'sharp focus').\n"
+            f"2. Chame flux_image passando esse prompt em ingles.\n"
+            f"3. Guarde o caminho retornado.\n\n"
+            f"Ao final, responda em portugues com uma tabela:\n"
+            f"| id | png_path | prompt usado |\n"
+            f"|---|---|---|"
+        ),
+        expected_output=(
+            "Tabela em portugues com id, png_path, prompt em ingles para cada imagem do manifest."
+        ),
+        agent=agent,
+    )
+
+
+def create_3d_pipeline_task(agent: Agent, context: dict) -> Task:
+    slug = context["slug"]
+    return Task(
+        description=(
+            f"Voce e o 3D Artist. O Image Artist ja gerou PNGs do projeto '{slug}'.\n\n"
+            f"O manifest_resolved esta em output/{slug}/assets/manifest_resolved.json.\n\n"
+            f"1. Filtre apenas itens com convert_to_3d=true E que tenham png_path valido.\n"
+            f"2. Para cada um, chame hunyuan3d_generate passando image_path=png_path absoluto.\n"
+            f"3. Capture o glb_path retornado.\n\n"
+            f"Ao final, responda em portugues com tabela:\n"
+            f"| id | glb_path | source_png |\n|---|---|---|"
+        ),
+        expected_output=(
+            "Tabela em portugues com id, glb_path, source_png para cada modelo 3D gerado."
+        ),
+        agent=agent,
+    )
+
+
+def create_designer_review_task(agent: Agent, context: dict) -> Task:
+    slug = context["slug"]
+    manifest_resolved_json = json.dumps(context["manifest_resolved"], ensure_ascii=False, indent=2)
+    guide_excerpt = context.get("guide_excerpt", "")
+    return Task(
+        description=(
+            f"Voce e o Designer revisando os PNGs do projeto '{slug}'.\n\n"
+            f"Trecho do guia visual:\n{guide_excerpt[:2000]}\n\n"
+            f"Manifest resolvido:\n{manifest_resolved_json}\n\n"
+            f"Para cada imagem com png_path, examine visualmente (voce esta recebendo via "
+            f"vision LLM, com a imagem anexada na mensagem) e julgue:\n"
+            f"- Atende ao 'purpose' declarado?\n- Bate com o mood do guia?\n"
+            f"- Qualidade tecnica aceitavel?\n\n"
+            f"Responda APENAS um JSON valido neste formato:\n"
+            f"{{\n"
+            f"  \"reviews\": [\n"
+            f"    {{\"id\": \"...\", \"verdict\": \"APROVADO\" ou \"REPROVADO\", "
+            f"\"reason\": \"...\", \"regen_prompt\": \"...\" (apenas se REPROVADO)}}\n"
+            f"  ]\n"
+            f"}}\n"
+            f"NADA fora do JSON. Sem markdown, sem texto antes ou depois."
+        ),
+        expected_output="JSON estrito com chave 'reviews' contendo verdict, reason e regen_prompt por imagem.",
+        agent=agent,
+    )
+
+
+def create_curator_finalize_task(agent: Agent, context: dict) -> Task:
+    slug = context["slug"]
+    return Task(
+        description=(
+            f"Voce e o Bibliotecario fazendo curadoria final do projeto '{slug}'.\n\n"
+            f"Status final do pipeline: {context['final_status']}\n"
+            f"MOC: {context['moc_path']}\n"
+            f"Effort: {context['effort_path']}\n\n"
+            f"Passos obrigatorios:\n"
+            f"1. Use pipeline_log com slug='{slug}' para listar tudo que foi feito.\n"
+            f"2. Use vault_organize op=list para inspecionar a estrutura ACE atual:\n"
+            f"   - Atlas/Maps, Atlas/Notes, Atlas/Utilities (sub-pastas por agente)\n"
+            f"   - Calendar/\n"
+            f"   - Efforts/On|Ongoing|Simmering|Archives\n"
+            f"3. Para cada arquivo escrito (eventos vault_write):\n"
+            f"   - Esta no bucket ACE correto? Se nao, vault_organize op=move.\n"
+            f"   - E uma duplicata/draft? Se sim, vault_organize op=delete (com reason).\n"
+            f"4. Identifique e apague:\n"
+            f"   - Arquivos com mesmo titulo no mesmo bucket (mantenha o mais recente).\n"
+            f"   - Notas com conteudo < 50 chars (excluindo frontmatter).\n"
+            f"   - NUNCA apague nada de output/{slug}/ — esses vao pro git.\n"
+            f"5. Atualize o MOC ({context['moc_path']}) acrescentando secao '## Curadoria' "
+            f"   com bullets do que foi consolidado e do que foi removido (com motivo).\n"
+            f"6. Escreva uma nota final em "
+            f"   'Atlas/Notes/Agentes/Bibliotecario/{slug}-curation.md' "
+            f"   com summary executivo do projeto (use vault_organize ou vault_writer).\n\n"
+            f"Responda em portugues com resumo curto: arquivos movidos (N), apagados (N), MOC atualizado, "
+            f"nota de curadoria criada em <path>."
+        ),
+        expected_output=(
+            "Resumo em portugues: contagem de arquivos movidos/apagados, confirmacao de MOC atualizado e path da nota de curadoria."
+        ),
         agent=agent,
     )
