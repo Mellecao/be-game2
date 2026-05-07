@@ -64,3 +64,35 @@ class Hunyuan3DTool(BaseTool):
             "source_image": image_path,
         })
         return glb_path
+
+
+class GenerateAllGlbsTool(BaseTool):
+    name: str = "generate_all_glbs"
+    description: str = (
+        "Gera GLBs para TODOS os itens do manifest_resolved com convert_to_3d=true. "
+        "Atualiza o JSON in-place. Use APENAS uma vez por projeto."
+    )
+
+    def _run(self, manifest_resolved_path: str) -> str:
+        import json as _json
+        from pathlib import Path as _Path
+
+        resolved = _json.loads(_Path(manifest_resolved_path).read_text(encoding="utf-8"))
+        hunyuan = Hunyuan3DTool()
+        n_ok = 0
+        n_target = 0
+
+        for item in resolved.get("images", []):
+            if not item.get("convert_to_3d") or not item.get("png_path"):
+                continue
+            n_target += 1
+            glb_path = hunyuan._run(image_path=item["png_path"])
+            if not str(glb_path).startswith("Erro"):
+                item["glb_path"] = glb_path
+                n_ok += 1
+
+        _Path(manifest_resolved_path).write_text(
+            _json.dumps(resolved, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        return f"GLBs gerados: {n_ok}/{n_target}. manifest_resolved atualizado."
