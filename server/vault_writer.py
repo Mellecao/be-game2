@@ -94,4 +94,12 @@ def write_note(
         except Exception as exc:
             logging.getLogger(__name__).debug("vault_writer: indexing skipped — %s", exc)
 
+    from server import pipeline_logger
+    pipeline_logger.log_event(None, "vault_write", {
+        "path": str(full.relative_to(VAULT_PATH)) if full.is_relative_to(VAULT_PATH) else str(full),
+        "agent_id": agent_id,
+        "ace_type": ace_type,
+        "tags": tags or [],
+    })
+
     return full
