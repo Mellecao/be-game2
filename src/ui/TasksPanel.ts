@@ -43,29 +43,38 @@ const STEP_LABELS: Record<string, string> = {
 
 // Maps pipeline status to the NPC/agent ID currently executing
 const STATUS_TO_AGENT: Record<string, string> = {
-  planning:    "planner",
-  copywriting: "copywriter",
-  designing:   "designer",
-  developing:  "programador",
-  reviewing:   "qa",
-  revision:    "programador",
-  deploying:   "devops",
-  closing:     "planner",
+  planning:         "planner",
+  copywriting:      "copywriter",
+  designing:        "designer",
+  imagining:        "image_artist",
+  reviewing_assets: "designer",
+  regen_assets:     "image_artist",
+  modeling_3d:      "agente_3d",
+  developing:       "programador",
+  reviewing:        "qa",
+  revision:         "programador",
+  deploying:        "devops",
+  closing:          "planner",
+  curating:         "bibliotecario",
 };
 
 const AGENT_INFO: Record<string, { name: string; initials: string; color: string; role: string }> = {
-  planner:     { name: "Planner",     initials: "PL", color: "#3b82f6", role: "Gerente de Projetos" },
-  copywriter:  { name: "Copywriter",  initials: "CW", color: "#8b5cf6", role: "Copywriter de Landing Pages" },
-  designer:    { name: "Designer",    initials: "DS", color: "#ec4899", role: "UI/UX Designer" },
-  programador: { name: "Programador", initials: "PR", color: "#10b981", role: "Desenvolvedor Full-Stack" },
-  qa:          { name: "QA",          initials: "QA", color: "#f59e0b", role: "Engenheiro de Qualidade" },
-  devops:      { name: "DevOps",      initials: "DO", color: "#6366f1", role: "Engenheiro DevOps" },
+  planner:       { name: "Planner",       initials: "PL", color: "#3b82f6", role: "Gerente de Projetos" },
+  copywriter:    { name: "Copywriter",    initials: "CW", color: "#8b5cf6", role: "Copywriter de Landing Pages" },
+  designer:      { name: "Designer",      initials: "DS", color: "#ec4899", role: "UI/UX Designer" },
+  image_artist:  { name: "Image Artist",  initials: "IA", color: "#f43f5e", role: "Artista Visual de IA" },
+  agente_3d:     { name: "Agente 3D",     initials: "3D", color: "#a855f7", role: "Artista 3D" },
+  programador:   { name: "Programador",   initials: "PR", color: "#10b981", role: "Desenvolvedor Full-Stack" },
+  qa:            { name: "QA",            initials: "QA", color: "#f59e0b", role: "Engenheiro de Qualidade" },
+  devops:        { name: "DevOps",        initials: "DO", color: "#6366f1", role: "Engenheiro DevOps" },
+  bibliotecario: { name: "Bibliotecario", initials: "BB", color: "#14b8a6", role: "Curador de Conhecimento" },
 };
 
 const ACTIVE_STATUSES = new Set([
   "waiting", "delegating", "planning", "copywriting",
-  "designing", "developing", "reviewing", "revision",
-  "deploying", "closing",
+  "designing", "imagining", "reviewing_assets", "regen_assets",
+  "modeling_3d", "developing", "reviewing", "revision",
+  "deploying", "closing", "curating",
 ]);
 
 export class TasksPanel {
