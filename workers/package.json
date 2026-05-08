@@ -1,0 +1,27 @@
+{
+  "name": "be-game-workers",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "secretario":   "tsx secretario.ts",
+    "bibliotecario":"tsx bibliotecario.ts",
+    "planner":      "tsx planner.ts",
+    "copywriter":   "tsx copywriter.ts",
+    "designer":     "tsx designer.ts",
+    "dev":          "tsx dev.ts",
+    "qa":           "tsx qa.ts",
+    "devops":       "tsx devops.ts",
+    "test":         "vitest run"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.30.0",
+    "express": "^5.0.0"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.0",
+    "@types/node": "^22.0.0",
+    "tsx": "^4.0.0",
+    "typescript": "^5.6.0",
+    "vitest": "^2.0.0"
+  }
+}
