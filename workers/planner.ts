@@ -50,8 +50,9 @@ if (!polling) {
 }
 
 startWorker({
-  name: 'planner',
-  port: 3003,
+  name:   'planner',
+  port:   3003,
+  apiKey: process.env.PAPERCLIP_API_KEY_PLANNER,
 
   onHeartbeat: async (payload) => {
     return ask(SYSTEM, `Analise e descreva o que precisa ser feito:\n${payload.description}`);

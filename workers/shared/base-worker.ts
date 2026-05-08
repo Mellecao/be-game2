@@ -2,9 +2,12 @@
 import express from 'express';
 
 export interface HeartbeatPayload {
-  task_id: string;
+  task_id:     string;
+  run_id?:     string;
   description: string;
-  context?: Record<string, unknown>;
+  context?:    Record<string, unknown>;
+  agent_id?:   string;
+  company_id?: string;
 }
 
 export interface InvokePayload {
@@ -13,10 +16,31 @@ export interface InvokePayload {
 }
 
 export interface WorkerConfig {
-  name: string;
-  port: number;
+  name:        string;
+  port:        number;
+  apiKey?:     string;
   onHeartbeat: (payload: HeartbeatPayload) => Promise<string>;
   onInvoke:    (payload: InvokePayload)    => Promise<string>;
+}
+
+/** Call Paperclip REST API authenticated as this agent */
+export async function callPaperclip(
+  path: string,
+  method: 'GET' | 'POST' | 'PATCH',
+  body: unknown,
+  apiKey: string,
+): Promise<unknown> {
+  const base = (process.env.PAPERCLIP_API_URL ?? 'http://localhost:3100').replace(/\/$/, '');
+  const res  = await fetch(`${base}${path}`, {
+    method,
+    headers: {
+      'Content-Type':  'application/json',
+      'Authorization': `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(`Paperclip ${method} ${path} → ${res.status}`);
+  return res.json();
 }
 
 export function startWorker(config: WorkerConfig): void {

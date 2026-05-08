@@ -17,8 +17,9 @@ async function searchVaultRemote(query: string): Promise<string> {
 }
 
 startWorker({
-  name: 'bibliotecario',
-  port: 3002,
+  name:   'bibliotecario',
+  port:   3002,
+  apiKey: process.env.PAPERCLIP_API_KEY_BIBLIOTECARIO,
 
   onHeartbeat: async (payload) => {
     const context = await searchVaultRemote(payload.description.slice(0, 100));

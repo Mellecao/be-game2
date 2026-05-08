@@ -19,8 +19,9 @@ async function getPipelineContext(): Promise<string> {
 }
 
 startWorker({
-  name: 'secretario',
-  port: 3001,
+  name:   'secretario',
+  port:   3001,
+  apiKey: process.env.PAPERCLIP_API_KEY_SECRETARIO,
 
   onHeartbeat: async (payload) => {
     const context = await getPipelineContext();
