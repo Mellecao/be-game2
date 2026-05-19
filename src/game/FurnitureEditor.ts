@@ -31,6 +31,8 @@ export class FurnitureEditor {
   private dragActive = false;
   private ghost: Graphics;
 
+  onMoved: (() => void) | null = null;
+
   constructor(app: Application, world: Container, private collision: CollisionMap) {
     this.world = world;
 
@@ -84,6 +86,10 @@ export class FurnitureEditor {
     if (!on) this.deselect();
   }
 
+  markRemoved(item: NitroFurniture) {
+    this.removedItems.add(item);
+  }
+
   getLayout(): FurnitureLayoutEntry[] {
     return this.items
       .filter((i) => i.id !== "")
@@ -123,9 +129,10 @@ export class FurnitureEditor {
     const wx = gx - this.world.x;
     const wy = gy - this.world.y;
     const { col, row } = screenToIso(wx, wy);
+    // Math.floor so the selected tile matches the floor diamond under the cursor
     return {
-      col: Math.max(0, Math.min(ROOM_COLS - 1, Math.round(col))),
-      row: Math.max(0, Math.min(ROOM_ROWS - 1, Math.round(row))),
+      col: Math.max(0, Math.min(ROOM_COLS - 1, Math.floor(col))),
+      row: Math.max(0, Math.min(ROOM_ROWS - 1, Math.floor(row))),
     };
   }
 
@@ -138,11 +145,19 @@ export class FurnitureEditor {
   private onGlobalUp(e: FederatedPointerEvent) {
     if (!this.active || !this.dragActive || !this.selected) return;
     const { col, row } = this.tileAt(e.globalX, e.globalY);
+
+    // Wall items (panels + decorations) can only be placed on wall edges
+    if (this.wallItems.has(this.selected) && col !== 0 && row !== 0) {
+      this.deselect();
+      return;
+    }
+
     this.collision.unblock(this.selected.worldCol, this.selected.worldRow);
     this.selected.moveTo(col, row);
     this.collision.block(col, row);
     this.dragActive = false;
     this.ghost.visible = false;
+    this.onMoved?.();
   }
 
   private onKey(e: KeyboardEvent) {
@@ -154,7 +169,8 @@ export class FurnitureEditor {
   }
 
   private drawGhost(col: number, row: number) {
-    const p = isoToScreen(col, row);
+    // Center on tile (col, row) — tiles are drawn at col+0.5, row+0.5
+    const p = isoToScreen(col + 0.5, row + 0.5);
     const hw = ISO_TILE_W / 2;
     const hh = ISO_TILE_H / 2;
     this.ghost.clear();

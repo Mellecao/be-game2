@@ -44,7 +44,10 @@
       "Bash(python -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\(json.dumps\\(d['result']['config'], indent=2\\)\\); print\\('points_count:', d['result'].get\\('points_count'\\)\\)\")",
       "Bash(python -c ' *)",
       "WebFetch(domain:github.com)",
-      "Bash(uv *)"
+      "Bash(uv *)",
+      "mcp__supabase__list_tables",
+      "mcp__supabase__execute_sql",
+      "mcp__supabase__apply_migration"
     ]
   }
 }

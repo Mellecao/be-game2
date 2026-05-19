@@ -1,3 +1,10 @@
+import { existsSync } from 'node:fs';
+import { resolve, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+const __dir = dirname(fileURLToPath(import.meta.url));
+const envFile = resolve(__dir, '.env');
+if (existsSync(envFile)) process.loadEnvFile(envFile);
+
 import express from 'express';
 import cors from 'cors';
 import { initSchema, history } from './db/messages.js';
@@ -8,6 +15,7 @@ import chatRouter      from './routes/chat.js';
 import vaultRouter     from './routes/vault.js';
 import tasksRouter     from './routes/tasks.js';
 import eventsRouter    from './routes/events.js';
+import playersRouter   from './routes/players.js';
 
 const DB_PATH = process.env.AGENT_DB_PATH ?? 'agent_messages.db';
 
@@ -19,6 +27,7 @@ export function createApp() {
   app.get('/',           (_req, res) => res.json({ status: 'ok', service: 'be-game-server' }));
   app.get('/api/health', (_req, res) => res.json({ status: 'ok' }));
 
+  app.use('/api/players',       playersRouter);
   app.use('/api/agents',        agentsRouter);
   app.use('/api/inventory',     inventoryRouter);
   app.use('/api/furniture',     furnitureRouter);

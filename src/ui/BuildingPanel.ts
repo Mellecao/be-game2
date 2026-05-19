@@ -20,7 +20,7 @@ export class BuildingPanel {
     this.saveBtn = this.makeBtn("building-save", "💾 Save", () => this.save());
     this.removeWallsBtn = this.makeBtn(
       "building-remove-walls",
-      "🗑️ Remove Walls",
+      "🗑️ Remover",
       () => this.toggleRemoveWalls()
     );
 

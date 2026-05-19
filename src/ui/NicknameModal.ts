@@ -1,12 +1,5 @@
 const STORAGE_KEY = 'be-game-identity'
-
-function generateId(): string {
-  if (typeof crypto.randomUUID === 'function') return crypto.randomUUID()
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
-    const r = (crypto.getRandomValues(new Uint8Array(1))[0] & 15) >> (c === 'x' ? 0 : 1)
-    return (c === 'x' ? r : (r & 0x3) | 0x8).toString(16)
-  })
-}
+const GAME_SERVER = import.meta.env.VITE_GAME_SERVER_URL ?? 'http://localhost:8000'
 
 export interface Identity {
   id: string
@@ -14,15 +7,57 @@ export interface Identity {
   spriteChar: number
 }
 
+async function loginToServer(nickname: string): Promise<Identity | null> {
+  try {
+    const res = await fetch(`${GAME_SERVER}/api/players/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ nickname }),
+    })
+    if (!res.ok) return null
+    const data = await res.json() as { id: string; nickname: string; sprite_char: number }
+    return { id: data.id, name: data.nickname, spriteChar: data.sprite_char }
+  } catch {
+    return null
+  }
+}
+
+function saveLocal(identity: Identity) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(identity))
+  } catch {
+    // private mode ou quota — continua sem persistir
+  }
+}
+
+function loadLocal(): Identity | null {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY)
+    if (!raw) return null
+    return JSON.parse(raw) as Identity
+  } catch {
+    localStorage.removeItem(STORAGE_KEY)
+    return null
+  }
+}
+
+function fallbackIdentity(name: string): Identity {
+  const id = typeof crypto.randomUUID === 'function'
+    ? crypto.randomUUID()
+    : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+        const r = (crypto.getRandomValues(new Uint8Array(1))[0] & 15) >> (c === 'x' ? 0 : 1)
+        return (c === 'x' ? r : (r & 0x3) | 0x8).toString(16)
+      })
+  return { id, name, spriteChar: Math.ceil(Math.random() * 4) }
+}
+
 export class NicknameModal {
   static async getOrPrompt(): Promise<Identity> {
-    const stored = localStorage.getItem(STORAGE_KEY)
+    const stored = loadLocal()
     if (stored) {
-      try {
-        return JSON.parse(stored) as Identity
-      } catch {
-        localStorage.removeItem(STORAGE_KEY)
-      }
+      // Atualiza last_seen em background sem bloquear o boot
+      loginToServer(stored.name).catch(() => {})
+      return stored
     }
     return NicknameModal.prompt()
   }
@@ -66,25 +101,28 @@ export class NicknameModal {
         padding: 10px; cursor: pointer; opacity: 0.5; transition: opacity 0.2s;
       `
 
+      const status = document.createElement('p')
+      status.style.cssText = 'margin: 0; font-size: 12px; color: #888; min-height: 16px;'
+
       input.addEventListener('input', () => {
         const ok = input.value.trim().length > 0
         btn.disabled = !ok
         btn.style.opacity = ok ? '1' : '0.5'
+        status.textContent = ''
       })
 
-      const confirm = () => {
+      const confirm = async () => {
         const name = input.value.trim()
         if (!name) return
-        const identity: Identity = {
-          id: generateId(),
-          name,
-          spriteChar: Math.ceil(Math.random() * 4),
-        }
-        try {
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(identity))
-        } catch {
-          // Storage unavailable (private mode, quota). Game continues without persisting.
-        }
+
+        btn.disabled = true
+        btn.textContent = 'Entrando...'
+        status.textContent = ''
+
+        const fromServer = await loginToServer(name)
+        const identity = fromServer ?? fallbackIdentity(name)
+
+        saveLocal(identity)
         overlay.remove()
         resolve(identity)
       }
@@ -94,7 +132,7 @@ export class NicknameModal {
         if (e.key === 'Enter') confirm()
       })
 
-      box.append(title, input, btn)
+      box.append(title, input, btn, status)
       overlay.appendChild(box)
       document.body.appendChild(overlay)
       input.focus()

@@ -83,6 +83,43 @@ const FURNITURE_CONFIG: FurnitureConfig[] = [
     defaultDir: 0,
     validDirs: [0, 2, 4, 6],
   },
+
+  // --- novos assets ---
+  { id: "deskcomp",       url: ASSETS.nitroDeskComp,       defaultCol: 7, defaultRow: 2, defaultDir: 4, validDirs: [2, 4] },
+  { id: "leatherchr",     url: ASSETS.nitroLeatherChr,     defaultCol: 6, defaultRow: 4, defaultDir: 2, validDirs: [0, 2, 4, 6] },
+  { id: "officetent",     url: ASSETS.nitroOfficeTent,     defaultCol: 5, defaultRow: 5, defaultDir: 2, validDirs: [2, 4] },
+  { id: "armyplant",      url: ASSETS.nitroArmyPlant,      defaultCol: 2, defaultRow: 2, defaultDir: 0, validDirs: [0, 2, 4, 6] },
+  { id: "tie",            url: ASSETS.nitroTie,            defaultCol: 5, defaultRow: 3, defaultDir: 0, validDirs: [0, 2, 4, 6] },
+  { id: "flatscreen",     url: ASSETS.nitroFlatscreen,     defaultCol: 8, defaultRow: 1, defaultDir: 4, validDirs: [2, 4] },
+  { id: "laptop",         url: ASSETS.nitroLaptop,         defaultCol: 7, defaultRow: 3, defaultDir: 2, validDirs: [0, 2, 4, 6] },
+  { id: "oldcomputer",    url: ASSETS.nitroOldComputer,    defaultCol: 8, defaultRow: 4, defaultDir: 4, validDirs: [2, 4] },
+  { id: "eastertable",    url: ASSETS.nitroEasterTable,    defaultCol: 5, defaultRow: 5, defaultDir: 2, validDirs: [0, 2, 4, 6] },
+  { id: "printer",        url: ASSETS.nitroPrinter,        defaultCol: 7, defaultRow: 5, defaultDir: 4, validDirs: [2, 4] },
+  { id: "exewall",        url: ASSETS.nitroExeWall,        defaultCol: 4, defaultRow: 0, defaultDir: 4, validDirs: [2, 4], includeShadow: false, yOffset: 30 },
+  { id: "drinkscabinet",  url: ASSETS.nitroDrinksCabinet,  defaultCol: 3, defaultRow: 5, defaultDir: 2, validDirs: [0, 2, 4, 6] },
+  { id: "glassdivider",   url: ASSETS.nitroGlassDivider,   defaultCol: 6, defaultRow: 3, defaultDir: 2, validDirs: [2, 4] },
+  { id: "globe",          url: ASSETS.nitroGlobe,          defaultCol: 5, defaultRow: 4, defaultDir: 0, validDirs: [0, 2, 4, 6] },
+  { id: "exeplant",       url: ASSETS.nitroExePlant,       defaultCol: 2, defaultRow: 4, defaultDir: 0, validDirs: [0, 2, 4, 6] },
+  { id: "rug",            url: ASSETS.nitroRug,            defaultCol: 5, defaultRow: 5, defaultDir: 0, validDirs: [0, 2, 4, 6] },
+  { id: "exetable",       url: ASSETS.nitroExeTable,       defaultCol: 5, defaultRow: 4, defaultDir: 2, validDirs: [0, 2, 4, 6] },
+  { id: "execchair",      url: ASSETS.nitroExeChair,       defaultCol: 7, defaultRow: 4, defaultDir: 2, validDirs: [0, 2, 4, 6] },
+  { id: "execchair2",     url: ASSETS.nitroExeChair2,      defaultCol: 6, defaultRow: 5, defaultDir: 4, validDirs: [0, 2, 4, 6] },
+  { id: "cubelight",      url: ASSETS.nitroCubeLight,      defaultCol: 3, defaultRow: 3, defaultDir: 0, validDirs: [0, 2, 4, 6] },
+  { id: "elevator",       url: ASSETS.nitroElevator,       defaultCol: 1, defaultRow: 1, defaultDir: 2, validDirs: [2, 4] },
+  { id: "hcglasdvdr",     url: ASSETS.nitroHcGlassDivider, defaultCol: 7, defaultRow: 3, defaultDir: 2, validDirs: [2, 4] },
+  { id: "exelight",       url: ASSETS.nitroExeLight,       defaultCol: 4, defaultRow: 2, defaultDir: 0, validDirs: [0, 2, 4, 6] },
+  { id: "exesmalltable",  url: ASSETS.nitroExeSmallTable,  defaultCol: 6, defaultRow: 4, defaultDir: 2, validDirs: [0, 2, 4, 6] },
+  { id: "seccam",         url: ASSETS.nitroSecCam,         defaultCol: 2, defaultRow: 2, defaultDir: 4, validDirs: [0, 2, 4, 6] },
+  { id: "exesofa",        url: ASSETS.nitroExeSofa,        defaultCol: 4, defaultRow: 6, defaultDir: 2, validDirs: [0, 2, 4, 6] },
+  { id: "exebigtable",    url: ASSETS.nitroExeBigTable,    defaultCol: 5, defaultRow: 5, defaultDir: 2, validDirs: [0, 2, 4, 6] },
+  { id: "waterfall",      url: ASSETS.nitroWaterfall,      defaultCol: 2, defaultRow: 2, defaultDir: 2, validDirs: [2, 4] },
+  { id: "workdesk",       url: ASSETS.nitroWorkDesk,       defaultCol: 8, defaultRow: 2, defaultDir: 4, validDirs: [2, 4] },
+  { id: "hc21",           url: ASSETS.nitroHc21,           defaultCol: 5, defaultRow: 5, defaultDir: 0, validDirs: [0, 2, 4, 6] },
+  { id: "exenewsofa",     url: ASSETS.nitroExeNewSofa,     defaultCol: 4, defaultRow: 6, defaultDir: 2, validDirs: [0, 2, 4, 6] },
+  { id: "labmachine",     url: ASSETS.nitroLabMachine,     defaultCol: 3, defaultRow: 4, defaultDir: 2, validDirs: [0, 2, 4, 6] },
+  { id: "laptopdesk",     url: ASSETS.nitroLaptopDesk,     defaultCol: 7, defaultRow: 2, defaultDir: 4, validDirs: [2, 4] },
+  { id: "newchair",       url: ASSETS.nitroNewChair,       defaultCol: 6, defaultRow: 4, defaultDir: 2, validDirs: [0, 2, 4, 6] },
+  { id: "xmasdeskitems",  url: ASSETS.nitroXmasDeskItems,  defaultCol: 7, defaultRow: 3, defaultDir: 2, validDirs: [0, 2, 4, 6] },
 ];
 
 export class Game {
@@ -116,6 +153,7 @@ export class Game {
 
     this.collision = new CollisionMap();
     this.editor = new FurnitureEditor(this.app, this.world, this.collision);
+    this.editor.onMoved = () => this.sortDepth();
 
     // Back-right wall panels: id = "wall_r_{col}"
     for (let col = 0; col < ROOM_COLS - 1; col += 2) {
@@ -158,19 +196,25 @@ export class Game {
       this.editor.register(panel, true);
     }
 
-    // Editable furniture
-    for (const cfg of FURNITURE_CONFIG) {
-      const saved = savedMap.get(cfg.id);
-      if (saved?.removed) continue;
+    // Editable furniture — only items explicitly saved in the DB are loaded.
+    // Iterating savedMap (not FURNITURE_CONFIG) correctly handles multi-instance
+    // IDs like "sofa_2", "sofa_3" that spawnFurniture creates over time.
+    for (const [id, saved] of savedMap) {
+      if (saved.removed) continue;
+      if (id.startsWith("wall_")) continue; // walls already handled above
+
+      const baseId = id.replace(/_\d+$/, "");
+      const cfg = FURNITURE_CONFIG.find((c) => c.id === baseId);
+      if (!cfg) continue;
 
       const item = await NitroFurniture.load(cfg.url, {
-        col: saved?.col ?? cfg.defaultCol,
-        row: saved?.row ?? cfg.defaultRow,
-        direction: saved?.direction ?? cfg.defaultDir,
+        col: saved.col,
+        row: saved.row,
+        direction: saved.direction,
         includeShadow: cfg.includeShadow,
         yOffset: cfg.yOffset,
       });
-      item.id = cfg.id;
+      item.id = id;
       item.validDirections = cfg.validDirs;
       this.world.addChild(item);
       this.furniture.push(item);
@@ -273,9 +317,13 @@ export class Game {
     const col = Math.floor(ROOM_COLS / 2);
     const row = Math.floor(ROOM_ROWS / 2);
 
+    const isWallDeco = cfg.id === "exewall";
+    const spawnCol = isWallDeco ? cfg.defaultCol : col;
+    const spawnRow = isWallDeco ? cfg.defaultRow : row;
+
     const item = await NitroFurniture.load(cfg.url, {
-      col,
-      row,
+      col: spawnCol,
+      row: spawnRow,
       direction: cfg.defaultDir,
       includeShadow: cfg.includeShadow,
       yOffset: cfg.yOffset,
@@ -284,7 +332,7 @@ export class Game {
     item.validDirections = cfg.validDirs;
     this.world.addChild(item);
     this.furniture.push(item);
-    this.editor.register(item);
+    this.editor.register(item, isWallDeco);
     this.sortDepth();
   }
 
@@ -296,6 +344,7 @@ export class Game {
     const item = active[active.length - 1];
     item.visible = false;
     this.collision.unblock(item.worldCol, item.worldRow);
+    this.editor.markRemoved(item);
   }
 
   async saveLayout(): Promise<void> {
@@ -350,11 +399,21 @@ export class Game {
   }
 
   private sortDepth() {
+    // Wall panels have a yOffset that inflates f.y, causing them to sort as if
+    // they are closer to camera than floor furniture at the same or lower row.
+    // Fix: sort furniture by logical tile Y (no yOffset), with a small negative
+    // bias for wall panels so they always render behind same-tile floor items.
+    const furnitureY = (f: NitroFurniture) => {
+      const tileY = isoToScreen(f.worldCol, f.worldRow).y;
+      const isWall = f.id.startsWith("wall_") || /^exewall(_\d+)?$/.test(f.id);
+      return isWall ? tileY - 1 : tileY;
+    };
+
     const items: { obj: Container; y: number }[] = [
       { obj: this.player, y: this.player.y },
       ...[...this.remotePlayers.values()].flatMap((rp) => rp ? [{ obj: rp as Container, y: rp.y }] : []),
       ...this.npcs.map((n) => ({ obj: n as Container, y: n.y })),
-      ...this.furniture.map((f) => ({ obj: f as Container, y: f.y })),
+      ...this.furniture.map((f) => ({ obj: f as Container, y: furnitureY(f) })),
     ];
     items.sort((a, b) => a.y - b.y);
     items.forEach((item, idx) => {
